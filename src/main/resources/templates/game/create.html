@@ -1,1 +1,201 @@
- 
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Créer une partie - Blokus</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <style>
+      body {
+        background-color: #f8f9fa;
+        padding-top: 20px;
+        padding-bottom: 50px;
+      }
+      .card {
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: none;
+      }
+      .card-header {
+        background-color: #5c6bc0;
+        color: white;
+        font-weight: bold;
+      }
+      .btn-primary {
+        background-color: #5c6bc0;
+        border-color: #5c6bc0;
+      }
+      .btn-primary:hover {
+        background-color: #3f51b5;
+        border-color: #3f51b5;
+      }
+      .btn-outline-secondary:hover {
+        background-color: #e0e0e0;
+        border-color: #e0e0e0;
+        color: #333;
+      }
+      .form-control:focus {
+        border-color: #5c6bc0;
+        box-shadow: 0 0 0 0.25rem rgba(92, 107, 192, 0.25);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Créer une nouvelle partie</h1>
+        <div>
+          <a th:href="@{/games}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Retour à la liste
+          </a>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 mx-auto">
+          <div class="card">
+            <div class="card-header">
+              <i class="fas fa-gamepad me-2"></i> Nouvelle partie de Blokus
+            </div>
+            <div class="card-body">
+              <form
+                th:action="@{/games/create}"
+                method="post"
+                th:object="${gameCreateDto}"
+              >
+                <!-- Game Name -->
+                <div class="mb-3">
+                  <label for="name" class="form-label"
+                    >Nom de la partie <span class="text-danger">*</span></label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="name"
+                    th:field="*{name}"
+                    required
+                    placeholder="Entrez un nom pour votre partie"
+                  />
+                  <div
+                    class="text-danger"
+                    th:if="${#fields.hasErrors('name')}"
+                    th:errors="*{name}"
+                  ></div>
+                  <div class="form-text">
+                    Le nom sera visible par les autres joueurs
+                  </div>
+                </div>
+
+                <!-- Game Mode -->
+                <div class="mb-3">
+                  <label class="form-label">Mode de jeu</label>
+                  <div class="form-check" th:each="mode : ${gameModes}">
+                    <input
+                      class="form-check-input"
+                      type="radio"
+                      th:field="*{mode}"
+                      th:value="${mode}"
+                      th:id="${'mode-' + mode.name()}"
+                    />
+                    <label
+                      class="form-check-label"
+                      th:for="${'mode-' + mode.name()}"
+                      th:text="${mode.name() == 'CLASSIC' ? 'Classique' : 'Chronométré'}"
+                    >
+                    </label>
+                    <span
+                      class="text-muted ms-2"
+                      th:if="${mode.name() == 'CLASSIC'}"
+                    >
+                      <small
+                        ><i class="fas fa-info-circle"></i> Sans limite de
+                        temps</small
+                      >
+                    </span>
+                    <span
+                      class="text-muted ms-2"
+                      th:if="${mode.name() == 'TIMED'}"
+                    >
+                      <small
+                        ><i class="fas fa-info-circle"></i> Avec limite de temps
+                        par tour</small
+                      >
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Expected Players -->
+                <div class="mb-3">
+                  <label for="expectedPlayers" class="form-label"
+                    >Nombre de joueurs <span class="text-danger">*</span></label
+                  >
+                  <select
+                    class="form-select"
+                    id="expectedPlayers"
+                    th:field="*{expectedPlayers}"
+                  >
+                    <option value="2">
+                      2 joueurs (les 2 autres seront des IA)
+                    </option>
+                    <option value="3">
+                      3 joueurs (le dernier sera une IA)
+                    </option>
+                    <option value="4">4 joueurs (aucune IA)</option>
+                  </select>
+                  <div
+                    class="text-danger"
+                    th:if="${#fields.hasErrors('expectedPlayers')}"
+                    th:errors="*{expectedPlayers}"
+                  ></div>
+                  <div class="form-text">
+                    Le jeu Blokus se joue à 4, mais vous pouvez choisir combien
+                    de joueurs humains vous voulez. Les places restantes seront
+                    remplies par l'IA.
+                  </div>
+                </div>
+
+                <!-- Information Card -->
+                <div class="alert alert-info mb-4">
+                  <div class="d-flex">
+                    <div class="me-3">
+                      <i class="fas fa-info-circle fa-2x"></i>
+                    </div>
+                    <div>
+                      <h5 class="alert-heading">Informations</h5>
+                      <p class="mb-0">
+                        Après avoir créé la partie, vous pourrez inviter des
+                        amis en partageant l'URL. La partie démarrera
+                        automatiquement lorsque tous les joueurs auront rejoint,
+                        ou vous pourrez la démarrer manuellement.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="d-flex justify-content-between">
+                  <a th:href="@{/games}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times me-1"></i> Annuler
+                  </a>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-check me-1"></i> Créer la partie
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

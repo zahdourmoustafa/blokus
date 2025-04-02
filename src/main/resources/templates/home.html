@@ -68,7 +68,7 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
       <div class="container">
-        <a class="navbar-brand" href="#">Blokus</a>
+        <a class="navbar-brand" th:href="@{/}">Blokus</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -83,10 +83,10 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav ms-auto">
             <li class="nav-item">
-              <a class="nav-link active" href="#">Accueil</a>
+              <a class="nav-link active" th:href="@{/}">Accueil</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="#">Mes Parties</a>
+              <a class="nav-link" th:href="@{/games}">Mes Parties</a>
             </li>
             <li class="nav-item">
               <a class="nav-link" href="#">Profil</a>
@@ -119,7 +119,9 @@
                   Créez votre propre partie et invitez d'autres joueurs à vous
                   rejoindre.
                 </p>
-                <a href="#" class="btn btn-primary">Créer une partie</a>
+                <a th:href="@{/games/create}" class="btn btn-primary"
+                  >Créer une partie</a
+                >
               </div>
             </div>
           </div>
@@ -130,7 +132,7 @@
                 <p class="card-text">
                   Rejoignez une partie en attente créée par d'autres joueurs.
                 </p>
-                <a href="#" class="btn btn-primary"
+                <a th:href="@{/games}" class="btn btn-primary"
                   >Voir les parties disponibles</a
                 >
               </div>
