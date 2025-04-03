@@ -13,4 +13,9 @@ public interface GameUserRepository extends JpaRepository<GameUser, Long> {
     List<GameUser> findByUserId(Long userId);
     Optional<GameUser> findByGameIdAndUserId(Long gameId, Long userId);
     int countByGameId(Long gameId);
+    
+    /**
+     * Find all players in a game ordered by their ID (for turn order)
+     */
+    List<GameUser> findByGameIdOrderById(Long gameId);
 } 

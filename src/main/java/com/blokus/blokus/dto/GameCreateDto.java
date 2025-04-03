@@ -1,46 +1,55 @@
 package com.blokus.blokus.dto;
 
-import com.blokus.blokus.model.Game;
-
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
+/**
+ * DTO for game creation
+ */
 public class GameCreateDto {
-    
-    @NotBlank(message = "Game name is required")
-    @Size(min = 3, max = 50, message = "Game name must be between 3 and 50 characters")
+
+    @NotEmpty(message = "Le nom de la partie est obligatoire")
+    @Size(min = 3, max = 50, message = "Le nom doit contenir entre 3 et 50 caractères")
     private String name;
-    
-    @Min(value = 2, message = "At least 2 players are required")
-    @Max(value = 4, message = "Maximum 4 players allowed")
-    private int expectedPlayers;
-    
-    private Game.GameMode mode = Game.GameMode.CLASSIC;
-    
-    // Getters and setters
+
+    @Min(value = 2, message = "Le nombre minimum de joueurs est 2")
+    @Max(value = 4, message = "Le nombre maximum de joueurs est 4")
+    private int maxPlayers;
+
+    private boolean timedMode;
+
+    public GameCreateDto() {
+    }
+
+    public GameCreateDto(String name, int maxPlayers, boolean timedMode) {
+        this.name = name;
+        this.maxPlayers = maxPlayers;
+        this.timedMode = timedMode;
+    }
+
     public String getName() {
         return name;
     }
-    
+
     public void setName(String name) {
         this.name = name;
     }
-    
-    public int getExpectedPlayers() {
-        return expectedPlayers;
+
+    public int getMaxPlayers() {
+        return maxPlayers;
     }
-    
-    public void setExpectedPlayers(int expectedPlayers) {
-        this.expectedPlayers = expectedPlayers;
+
+    public void setMaxPlayers(int maxPlayers) {
+        this.maxPlayers = maxPlayers;
     }
-    
-    public Game.GameMode getMode() {
-        return mode;
+
+    public boolean isTimedMode() {
+        return timedMode;
     }
-    
-    public void setMode(Game.GameMode mode) {
-        this.mode = mode;
+
+    public void setTimedMode(boolean timedMode) {
+        this.timedMode = timedMode;
     }
 } 

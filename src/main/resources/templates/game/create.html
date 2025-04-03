@@ -1,201 +1,298 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<html
+  lang="fr"
+  xmlns:th="http://www.thymeleaf.org"
+  xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Créer une partie - Blokus</title>
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
     />
     <link
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
     />
     <style>
       body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
         background-color: #f8f9fa;
-        padding-top: 20px;
-        padding-bottom: 50px;
       }
+
+      main {
+        flex: 1;
+        padding: 2rem 0;
+      }
+
       .card {
-        margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         border: none;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
       }
+
       .card-header {
+        font-weight: bold;
         background-color: #5c6bc0;
         color: white;
-        font-weight: bold;
       }
-      .btn-primary {
+
+      .submit-btn {
         background-color: #5c6bc0;
         border-color: #5c6bc0;
       }
-      .btn-primary:hover {
+
+      .submit-btn:hover {
         background-color: #3f51b5;
         border-color: #3f51b5;
       }
-      .btn-outline-secondary:hover {
-        background-color: #e0e0e0;
-        border-color: #e0e0e0;
-        color: #333;
+
+      .form-check-input:checked {
+        background-color: #5c6bc0;
+        border-color: #5c6bc0;
       }
-      .form-control:focus {
+
+      .form-check-input:focus {
         border-color: #5c6bc0;
         box-shadow: 0 0 0 0.25rem rgba(92, 107, 192, 0.25);
+      }
+
+      .form-control:focus,
+      .form-select:focus {
+        border-color: #5c6bc0;
+        box-shadow: 0 0 0 0.25rem rgba(92, 107, 192, 0.25);
+      }
+
+      .alert {
+        border-left: 4px solid;
+      }
+
+      .alert-danger {
+        border-left-color: #dc3545;
+      }
+
+      .page-title {
+        border-bottom: 2px solid #5c6bc0;
+        padding-bottom: 0.5rem;
+        color: #5c6bc0;
+        margin-bottom: 1.5rem;
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <!-- Header -->
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Créer une nouvelle partie</h1>
-        <div>
-          <a th:href="@{/games}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Retour à la liste
-          </a>
+    <!-- Navbar -->
+    <nav
+      class="navbar navbar-expand-lg navbar-dark"
+      style="background-color: #5c6bc0"
+    >
+      <div class="container">
+        <a class="navbar-brand" href="/">Blokus</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="/">Accueil</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" href="/games">Parties</a>
+            </li>
+          </ul>
+          <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                id="userDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+              >
+                <i class="fas fa-user me-1"></i>
+                <span sec:authentication="name">Utilisateur</span>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/profile">Mon profil</a></li>
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <form th:action="@{/logout}" method="post">
+                    <button class="dropdown-item" type="submit">
+                      Déconnexion
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </li>
+          </ul>
         </div>
       </div>
+    </nav>
 
-      <div class="row">
-        <div class="col-md-8 mx-auto">
+    <!-- Main content -->
+    <main class="container">
+      <!-- Page header -->
+      <h1 class="page-title">Créer une nouvelle partie</h1>
+
+      <!-- Error message -->
+      <div th:if="${errorMessage}" class="alert alert-danger mb-4" role="alert">
+        <i class="fas fa-exclamation-circle me-2"></i>
+        <span th:text="${errorMessage}">Message d'erreur</span>
+      </div>
+
+      <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
           <div class="card">
             <div class="card-header">
-              <i class="fas fa-gamepad me-2"></i> Nouvelle partie de Blokus
+              <i class="fas fa-gamepad me-2"></i>Paramètres de la partie
             </div>
             <div class="card-body">
               <form
                 th:action="@{/games/create}"
-                method="post"
                 th:object="${gameCreateDto}"
+                method="post"
               >
                 <!-- Game Name -->
                 <div class="mb-3">
-                  <label for="name" class="form-label"
-                    >Nom de la partie <span class="text-danger">*</span></label
-                  >
+                  <label for="name" class="form-label">Nom de la partie</label>
                   <input
                     type="text"
                     class="form-control"
                     id="name"
                     th:field="*{name}"
-                    required
-                    placeholder="Entrez un nom pour votre partie"
+                    placeholder="Ex: Partie de Jean"
                   />
                   <div
-                    class="text-danger"
+                    class="form-text text-danger"
                     th:if="${#fields.hasErrors('name')}"
                     th:errors="*{name}"
                   ></div>
-                  <div class="form-text">
-                    Le nom sera visible par les autres joueurs
+                </div>
+
+                <!-- Max Players -->
+                <div class="mb-3">
+                  <label for="maxPlayers" class="form-label"
+                    >Nombre de joueurs</label
+                  >
+                  <select
+                    class="form-select"
+                    id="maxPlayers"
+                    th:field="*{maxPlayers}"
+                  >
+                    <option value="2">2 joueurs</option>
+                    <option value="3">3 joueurs</option>
+                    <option value="4">4 joueurs</option>
+                  </select>
+                  <div
+                    class="form-text text-danger"
+                    th:if="${#fields.hasErrors('maxPlayers')}"
+                    th:errors="*{maxPlayers}"
+                  ></div>
+                  <div class="form-text text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Les joueurs manquants seront remplacés par des IA.
                   </div>
                 </div>
 
                 <!-- Game Mode -->
-                <div class="mb-3">
+                <div class="mb-4">
                   <label class="form-label">Mode de jeu</label>
-                  <div class="form-check" th:each="mode : ${gameModes}">
+                  <div class="form-check">
                     <input
                       class="form-check-input"
                       type="radio"
-                      th:field="*{mode}"
-                      th:value="${mode}"
-                      th:id="${'mode-' + mode.name()}"
+                      name="timedMode"
+                      id="classicMode"
+                      th:field="*{timedMode}"
+                      th:value="false"
+                      checked
                     />
-                    <label
-                      class="form-check-label"
-                      th:for="${'mode-' + mode.name()}"
-                      th:text="${mode.name() == 'CLASSIC' ? 'Classique' : 'Chronométré'}"
-                    >
+                    <label class="form-check-label" for="classicMode">
+                      <i class="fas fa-chess me-1"></i> Mode classique
+                      <div class="form-text text-muted ms-4">
+                        Pas de limite de temps pour jouer
+                      </div>
                     </label>
-                    <span
-                      class="text-muted ms-2"
-                      th:if="${mode.name() == 'CLASSIC'}"
-                    >
-                      <small
-                        ><i class="fas fa-info-circle"></i> Sans limite de
-                        temps</small
-                      >
-                    </span>
-                    <span
-                      class="text-muted ms-2"
-                      th:if="${mode.name() == 'TIMED'}"
-                    >
-                      <small
-                        ><i class="fas fa-info-circle"></i> Avec limite de temps
-                        par tour</small
-                      >
-                    </span>
+                  </div>
+                  <div class="form-check mt-2">
+                    <input
+                      class="form-check-input"
+                      type="radio"
+                      name="timedMode"
+                      id="timedMode"
+                      th:field="*{timedMode}"
+                      th:value="true"
+                    />
+                    <label class="form-check-label" for="timedMode">
+                      <i class="fas fa-stopwatch me-1"></i> Mode chronométré
+                      <div class="form-text text-muted ms-4">
+                        Limite de 60 secondes par tour
+                      </div>
+                    </label>
                   </div>
                 </div>
 
-                <!-- Expected Players -->
-                <div class="mb-3">
-                  <label for="expectedPlayers" class="form-label"
-                    >Nombre de joueurs <span class="text-danger">*</span></label
-                  >
-                  <select
-                    class="form-select"
-                    id="expectedPlayers"
-                    th:field="*{expectedPlayers}"
-                  >
-                    <option value="2">
-                      2 joueurs (les 2 autres seront des IA)
-                    </option>
-                    <option value="3">
-                      3 joueurs (le dernier sera une IA)
-                    </option>
-                    <option value="4">4 joueurs (aucune IA)</option>
-                  </select>
-                  <div
-                    class="text-danger"
-                    th:if="${#fields.hasErrors('expectedPlayers')}"
-                    th:errors="*{expectedPlayers}"
-                  ></div>
-                  <div class="form-text">
-                    Le jeu Blokus se joue à 4, mais vous pouvez choisir combien
-                    de joueurs humains vous voulez. Les places restantes seront
-                    remplies par l'IA.
-                  </div>
-                </div>
-
-                <!-- Information Card -->
-                <div class="alert alert-info mb-4">
-                  <div class="d-flex">
-                    <div class="me-3">
-                      <i class="fas fa-info-circle fa-2x"></i>
-                    </div>
-                    <div>
-                      <h5 class="alert-heading">Informations</h5>
-                      <p class="mb-0">
-                        Après avoir créé la partie, vous pourrez inviter des
-                        amis en partageant l'URL. La partie démarrera
-                        automatiquement lorsque tous les joueurs auront rejoint,
-                        ou vous pourrez la démarrer manuellement.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Buttons -->
-                <div class="d-flex justify-content-between">
-                  <a th:href="@{/games}" class="btn btn-outline-secondary">
-                    <i class="fas fa-times me-1"></i> Annuler
-                  </a>
-                  <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-check me-1"></i> Créer la partie
+                <div class="d-grid gap-2">
+                  <button type="submit" class="btn btn-primary submit-btn">
+                    <i class="fas fa-plus me-1"></i> Créer la partie
                   </button>
+                  <a href="/games" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i> Retour à la liste
+                  </a>
                 </div>
               </form>
             </div>
           </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <i class="fas fa-info-circle me-2"></i>Informations
+            </div>
+            <div class="card-body">
+              <h5 class="card-title">Règles du jeu</h5>
+              <p>
+                Le Blokus est un jeu de stratégie où chaque joueur tente de
+                placer le plus de pièces possible sur le plateau.
+              </p>
+              <ul class="mb-0">
+                <li>
+                  Chaque joueur dispose de 21 pièces de formes différentes.
+                </li>
+                <li>Le premier coup doit être joué dans un coin du plateau.</li>
+                <li>
+                  Les pièces suivantes doivent toucher au moins un coin d'une
+                  pièce de même couleur.
+                </li>
+                <li>Les pièces ne peuvent pas se toucher par les côtés.</li>
+                <li>
+                  Le jeu se termine lorsque plus aucun joueur ne peut placer de
+                  pièce.
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Footer -->
+    <footer
+      class="text-white text-center py-3 mt-5"
+      style="background-color: #343a40"
+    >
+      <div class="container">
+        <p class="mb-0">&copy; 2023 Blokus - Tous droits réservés</p>
+      </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>

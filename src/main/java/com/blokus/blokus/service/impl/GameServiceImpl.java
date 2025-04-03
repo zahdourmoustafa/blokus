@@ -1,126 +1,138 @@
 package com.blokus.blokus.service.impl;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.blokus.blokus.dto.GameCreateDto;
 import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
+import com.blokus.blokus.model.Game.GameStatus;
+import com.blokus.blokus.model.Game.GameMode;
 import com.blokus.blokus.model.GameUser;
+import com.blokus.blokus.model.GameUser.PlayerColor;
 import com.blokus.blokus.model.User;
+import com.blokus.blokus.repository.BoardRepository;
 import com.blokus.blokus.repository.GameRepository;
-import com.blokus.blokus.repository.UserRepository;
+import com.blokus.blokus.repository.GameUserRepository;
 import com.blokus.blokus.service.GameService;
 
+import jakarta.persistence.EntityNotFoundException;
+
+/**
+ * Implémentation du service de gestion des parties
+ */
 @Service
 public class GameServiceImpl implements GameService {
 
     private final GameRepository gameRepository;
-    private final UserRepository userRepository;
+    private final GameUserRepository gameUserRepository;
+    private final BoardRepository boardRepository;
 
     public GameServiceImpl(GameRepository gameRepository,
-                           UserRepository userRepository) {
+            GameUserRepository gameUserRepository, BoardRepository boardRepository) {
         this.gameRepository = gameRepository;
-        this.userRepository = userRepository;
+        this.gameUserRepository = gameUserRepository;
+        this.boardRepository = boardRepository;
     }
 
     @Override
     @Transactional
-    public Game createGame(GameCreateDto gameDto) {
-        User currentUser = getCurrentUser();
-        
-        // Create a new game with the provided details
+    public Game createGame(GameCreateDto gameDto, User creator) {
+        // Create new game with parameters from DTO
         Game game = new Game();
         game.setName(gameDto.getName());
-        game.setExpectedPlayers(gameDto.getExpectedPlayers());
-        game.setMode(gameDto.getMode());
+        game.setExpectedPlayers(gameDto.getMaxPlayers());
+        game.setMode(gameDto.isTimedMode() ? GameMode.TIMED : GameMode.CLASSIC);
+        // Creation date is set automatically via @PrePersist in Game entity
         
-        // Initialize and associate a new board
-        Board board = new Board();
-        board.setGame(game);
-        game.setBoard(board);
-        
-        // Save the game to get an ID
+        // Save game first to get ID
         game = gameRepository.save(game);
         
-        // Create GameUser (player) entry for the creator
-        GameUser creator = new GameUser();
-        creator.setUser(currentUser);
-        creator.setGame(game);
-        creator.setColor(GameUser.PlayerColor.BLUE); // First player gets blue
+        // Create game-user relationship
+        GameUser gameUser = new GameUser();
+        gameUser.setGame(game);
+        gameUser.setUser(creator);
+        gameUser.setColor(PlayerColor.BLUE); // First player gets blue
         
-        game.addPlayer(creator);
+        gameUserRepository.save(gameUser);
         
-        // Save again with the creator added
-        return gameRepository.save(game);
-    }
-
-    @Override
-    public List<Game> findAvailableGames() {
-        return gameRepository.findAvailableGames();
+        // Initialize empty board
+        Board board = new Board();
+        board.setGame(game);
+        // Board is already initialized with an empty grid in its constructor
+        boardRepository.save(board);
+        
+        return game;
     }
 
     @Override
     public Game findById(Long id) {
         return gameRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Game not found with id: " + id));
+                .orElseThrow(() -> new EntityNotFoundException("Game not found with id: " + id));
+    }
+
+    @Override
+    public List<Game> findAvailableGames() {
+        return gameRepository.findByStatus(GameStatus.WAITING);
     }
 
     @Override
     @Transactional
-    public Game joinGame(Long gameId) {
-        User currentUser = getCurrentUser();
+    public Game joinGame(Long gameId, User user) {
         Game game = findById(gameId);
         
-        // Check if game is joinable
-        if (game.getStatus() != Game.GameStatus.WAITING) {
-            throw new IllegalStateException("This game is no longer accepting players");
+        // Check if game can be joined
+        if (game.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("La partie n'est pas en attente de joueurs");
         }
         
-        // Check if the user is already in the game
-        Optional<GameUser> existingPlayer = game.getPlayers().stream()
-                .filter(player -> player.getUser().getId().equals(currentUser.getId()))
-                .findFirst();
-        
-        if (existingPlayer.isPresent()) {
-            return game; // User is already in this game
+        // Check if user is already in the game
+        Optional<GameUser> existingGameUser = gameUserRepository.findByGameIdAndUserId(gameId, user.getId());
+        if (existingGameUser.isPresent()) {
+            throw new IllegalStateException("Vous êtes déjà dans cette partie");
         }
         
-        // Check if there's room for more players
-        if (game.getPlayers().size() >= game.getExpectedPlayers()) {
-            throw new IllegalStateException("This game is already full");
+        // Check if game is full
+        List<GameUser> currentPlayers = gameUserRepository.findByGameId(gameId);
+        if (currentPlayers.size() >= game.getExpectedPlayers()) {
+            throw new IllegalStateException("La partie est déjà complète");
         }
         
-        // Assign the next available color based on player count
-        GameUser.PlayerColor[] colors = GameUser.PlayerColor.values();
-        GameUser.PlayerColor assignedColor = colors[game.getPlayers().size() % colors.length];
+        // Add user to game with appropriate color
+        GameUser gameUser = new GameUser();
+        gameUser.setGame(game);
+        gameUser.setUser(user);
         
-        // Create and add the new player
-        GameUser newPlayer = new GameUser();
-        newPlayer.setUser(currentUser);
-        newPlayer.setGame(game);
-        newPlayer.setColor(assignedColor);
+        // Assign color based on join order
+        PlayerColor[] colors = {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
+        gameUser.setColor(colors[currentPlayers.size()]);
         
-        game.addPlayer(newPlayer);
+        gameUserRepository.save(gameUser);
         
-        // Check if we should start the game now
-        if (game.getPlayers().size() >= game.getExpectedPlayers()) {
-            game.setStatus(Game.GameStatus.PLAYING);
+        // Check if game should start automatically
+        if (isGameReadyToStart(gameId)) {
+            startGame(gameId);
         }
         
-        return gameRepository.save(game);
+        return game;
     }
 
     @Override
-    public List<Game> findMyGames() {
-        User currentUser = getCurrentUser();
-        return gameRepository.findGamesByUserId(currentUser.getId());
+    public List<Game> findUserGames(Long userId) {
+        return gameUserRepository.findByUserId(userId).stream()
+                .map(GameUser::getGame)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean isGameReadyToStart(Long gameId) {
+        Game game = findById(gameId);
+        int playerCount = gameUserRepository.countByGameId(gameId);
+        return playerCount >= game.getExpectedPlayers();
     }
 
     @Override
@@ -128,84 +140,99 @@ public class GameServiceImpl implements GameService {
     public Game startGame(Long gameId) {
         Game game = findById(gameId);
         
-        if (game.getStatus() != Game.GameStatus.WAITING) {
-            throw new IllegalStateException("Game cannot be started with status: " + game.getStatus());
+        if (game.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("La partie n'est pas en attente de joueurs");
         }
         
-        if (game.getPlayers().size() < 2) {
-            throw new IllegalStateException("Cannot start game with fewer than 2 players");
-        }
-        
-        // Generate AI players if needed
-        generateAIPlayersIfNeeded(game);
-        
-        game.setStatus(Game.GameStatus.PLAYING);
+        game.setStatus(GameStatus.PLAYING);
         return gameRepository.save(game);
     }
     
-    /**
-     * Generates AI players to fill the game if needed
-     * @param game The game to add AI players to
-     */
-    private void generateAIPlayersIfNeeded(Game game) {
-        int humanPlayersCount = game.getPlayers().size();
-        int aiPlayersNeeded = 4 - humanPlayersCount; // Blokus is played by 4 players
+    @Override
+    @Transactional
+    public Game leaveGame(Long gameId, User user) {
+        Game game = findById(gameId);
         
-        if (aiPlayersNeeded <= 0) {
-            return; // No AI players needed
+        // Vérifier si la partie peut être quittée
+        if (game.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("Vous ne pouvez pas quitter une partie en cours ou terminée");
         }
         
-        // Find the system user for AI (or create one if it doesn't exist)
-        User aiUser = getOrCreateAIUser();
+        // Trouver la relation joueur-partie
+        GameUser gameUser = gameUserRepository.findByGameIdAndUserId(gameId, user.getId())
+                .orElseThrow(() -> new IllegalStateException("Vous n'êtes pas dans cette partie"));
         
-        // Create AI players with the remaining colors
-        GameUser.PlayerColor[] colors = GameUser.PlayerColor.values();
-        for (int i = 0; i < aiPlayersNeeded; i++) {
-            GameUser aiPlayer = new GameUser();
-            aiPlayer.setUser(aiUser);
-            aiPlayer.setGame(game);
-            aiPlayer.setBot(true);
-            
-            // Assign next available color
-            aiPlayer.setColor(colors[(humanPlayersCount + i) % colors.length]);
-            
-            game.addPlayer(aiPlayer);
+        // Si c'est le créateur (premier joueur), supprimer la partie
+        List<GameUser> players = gameUserRepository.findByGameId(gameId);
+        if (players.size() == 1 || players.get(0).getUser().getId().equals(user.getId())) {
+            // Supprimer la partie complètement
+            gameRepository.delete(game);
+            return null;
+        } else {
+            // Sinon, retirer le joueur de la partie
+            gameUserRepository.delete(gameUser);
+            return game;
         }
     }
     
-    /**
-     * Gets or creates a user for AI players
-     * @return User entity for AI
-     */
-    private User getOrCreateAIUser() {
-        String aiUsername = "ai_system";
-        
-        return userRepository.findByUsername(aiUsername)
-                .orElseGet(() -> {
-                    // Create a system user for AI if it doesn't exist
-                    User aiUser = new User();
-                    aiUser.setUsername(aiUsername);
-                    aiUser.setEmail("ai@blokus.com");
-                    aiUser.setPassword("$2a$10$AI_SYSTEM_PASSWORD"); // This password is not usable
-                    
-                    return userRepository.save(aiUser);
-                });
+    @Override
+    @Transactional
+    public List<GameUser> getGameParticipants(Long gameId) {
+        return gameUserRepository.findByGameId(gameId);
     }
     
-    /**
-     * Helper method to get the current authenticated user
-     */
-    private User getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new IllegalStateException("No authenticated user found");
+    @Override
+    @Transactional
+    public Game addBotToGame(Long gameId) {
+        Game game = findById(gameId);
+        
+        // Vérifier si la partie peut accueillir un bot
+        if (game.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("Impossible d'ajouter un bot à une partie qui n'est pas en attente");
         }
         
-        // Get username from the authentication object
-        String username = auth.getName();
+        List<GameUser> currentPlayers = gameUserRepository.findByGameId(gameId);
+        if (currentPlayers.size() >= game.getExpectedPlayers()) {
+            throw new IllegalStateException("La partie est déjà complète");
+        }
         
-        // Find the corresponding User entity
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalStateException("User not found: " + username));
+        // Créer un bot
+        GameUser botUser = new GameUser();
+        botUser.setGame(game);
+        botUser.setBot(true);
+        
+        // Assigner une couleur en fonction de l'ordre de rejointe
+        PlayerColor[] colors = {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
+        botUser.setColor(colors[currentPlayers.size()]);
+        
+        gameUserRepository.save(botUser);
+        
+        // Vérifier si la partie devrait démarrer automatiquement
+        if (isGameReadyToStart(gameId)) {
+            startGame(gameId);
+        }
+        
+        return game;
+    }
+    
+    @Override
+    @Transactional
+    public Game cancelGame(Long gameId, User user) {
+        Game game = findById(gameId);
+        
+        // Vérifier si la partie peut être annulée
+        if (game.getStatus() != GameStatus.WAITING) {
+            throw new IllegalStateException("Impossible d'annuler une partie qui n'est pas en attente");
+        }
+        
+        // Vérifier si l'utilisateur est le créateur
+        List<GameUser> players = gameUserRepository.findByGameId(gameId);
+        if (players.isEmpty() || !players.get(0).getUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Seul le créateur de la partie peut l'annuler");
+        }
+        
+        // Supprimer la partie
+        gameRepository.delete(game);
+        return null;
     }
 } 
