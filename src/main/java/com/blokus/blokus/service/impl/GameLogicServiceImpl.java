@@ -634,4 +634,14 @@ public class GameLogicServiceImpl implements GameLogicService {
             case GREEN -> new int[]{0, BOARD_SIZE - 1}; // Bottom-left
         };
     }
+
+    @Override
+    public List<Piece> getAvailablePiecesByGameUserId(Long gameId, Long gameUserId) {
+        // Look up the GameUser to get its color
+        GameUser gameUser = gameUserRepository.findById(gameUserId)
+                .orElseThrow(() -> new EntityNotFoundException("GameUser not found with id: " + gameUserId));
+        
+        // Use the color to find available pieces for this player
+        return pieceRepository.findByBoardGameIdAndColorAndPosXLessThan(gameId, gameUser.getColor(), 0);
+    }
 } 

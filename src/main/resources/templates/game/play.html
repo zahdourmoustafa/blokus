@@ -7,6 +7,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="user-id" th:content="${@userService.getCurrentUser().id}" />
     <title>Jouer au Blokus</title>
     <link
       rel="stylesheet"
@@ -16,6 +17,21 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
     />
+    <link rel="stylesheet" href="/css/game.css" />
+    <!-- Add SockJS and STOMP client libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stomp-websocket@2.3.4-next/lib/stomp.min.js"></script>
+    <!-- Add console logging for debugging -->
+    <script>
+      console.log("Play.html template loaded");
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("DOM Content loaded");
+        console.log(
+          "Game board element:",
+          document.getElementById("game-board")
+        );
+      });
+    </script>
     <style>
       body {
         min-height: 100vh;
@@ -30,15 +46,53 @@
       }
 
       .game-container {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr;
+        grid-template-rows: 1fr 2fr 1fr;
+        gap: 10px;
+        height: 100%;
       }
 
-      @media (min-width: 992px) {
-        .game-container {
-          flex-direction: row;
-        }
+      .game-board-container {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .player-pieces-container {
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        padding: 10px;
+        position: relative;
+      }
+
+      .player-blue-pieces {
+        grid-column: 1;
+        grid-row: 1;
+        border-top: 5px solid #2196f3;
+      }
+
+      .player-yellow-pieces {
+        grid-column: 3;
+        grid-row: 1;
+        border-top: 5px solid #ffc107;
+      }
+
+      .player-red-pieces {
+        grid-column: 3;
+        grid-row: 3;
+        border-top: 5px solid #f44336;
+      }
+
+      .player-green-pieces {
+        grid-column: 1;
+        grid-row: 3;
+        border-top: 5px solid #4caf50;
       }
 
       .game-board {
@@ -48,6 +102,9 @@
         background-color: #ddd;
         padding: 1px;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 600px;
+        aspect-ratio: 1/1;
       }
 
       .cell {
@@ -76,40 +133,28 @@
         background-color: #4caf50;
       }
 
-      .game-sidebar {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-      }
-
-      .card {
-        border: none;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      }
-
-      .card-header {
-        font-weight: bold;
-        background-color: #5c6bc0;
-        color: white;
-      }
-
       .pieces-container {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-        max-height: 400px;
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+        gap: 8px;
         overflow-y: auto;
+        flex-grow: 1;
         padding: 10px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        min-height: 100px;
       }
 
       .piece {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
         gap: 1px;
-        background-color: #ddd;
+        background-color: #e0e0e0;
         padding: 1px;
         cursor: pointer;
-        position: relative;
+        border: 1px solid #ccc;
+        border-radius: 2px;
+        aspect-ratio: 1 / 1;
       }
 
       .piece.selected {
@@ -119,6 +164,9 @@
       .piece-cell {
         aspect-ratio: 1/1;
         background-color: #f5f5f5;
+        border: none;
+        min-width: 5px;
+        min-height: 5px;
       }
 
       .piece-blue .piece-cell-filled {
@@ -137,102 +185,50 @@
         background-color: #4caf50;
       }
 
-      .player-card {
-        display: flex;
-        align-items: center;
-        padding: 10px;
-        border-left: 5px solid #ddd;
-        margin-bottom: 5px;
+      .piece.used {
+        opacity: 0.4;
+        cursor: default;
+        pointer-events: none;
       }
 
-      .player-card.current {
-        background-color: #f8f9fa;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-
-      .player-blue {
-        border-left-color: #2196f3;
-      }
-
-      .player-yellow {
-        border-left-color: #ffc107;
-      }
-
-      .player-red {
-        border-left-color: #f44336;
-      }
-
-      .player-green {
-        border-left-color: #4caf50;
-      }
-
-      .player-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 10px;
+      .player-info {
         font-weight: bold;
-        color: white;
-      }
-
-      .avatar-blue {
-        background-color: #2196f3;
-      }
-
-      .avatar-yellow {
-        background-color: #ffc107;
+        text-align: center;
+        margin-bottom: 5px;
         color: #333;
       }
 
-      .avatar-red {
-        background-color: #f44336;
+      .player-info.current {
+        color: #5c6bc0;
       }
 
-      .avatar-green {
-        background-color: #4caf50;
-      }
-
-      .controls {
+      .controls-container {
         display: flex;
+        justify-content: center;
         gap: 10px;
         margin-top: 10px;
       }
 
-      .btn-blue {
+      .controls-container button {
+        padding: 5px 10px;
+        border: none;
+        border-radius: 4px;
         background-color: #5c6bc0;
-        border-color: #5c6bc0;
         color: white;
+        cursor: pointer;
       }
 
-      .btn-blue:hover {
+      .controls-container button:hover {
         background-color: #3f51b5;
-        border-color: #3f51b5;
-        color: white;
-      }
-
-      .piece-controls {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
-      }
-
-      .piece-preview {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 1px;
-        background-color: #ddd;
-        padding: 1px;
-        max-width: 150px;
-        margin: 10px auto;
       }
     </style>
   </head>
   <body>
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #5c6bc0;">
+    <nav
+      class="navbar navbar-expand-lg navbar-dark"
+      style="background-color: #5c6bc0"
+    >
       <div class="container">
         <a class="navbar-brand" href="/">Blokus</a>
         <button
@@ -252,594 +248,782 @@
               <a class="nav-link" href="/games">Parties</a>
             </li>
           </ul>
-          <ul class="navbar-nav">
-            <li class="nav-item dropdown">
+          <div class="navbar-nav">
+            <div class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"
                 href="#"
-                id="userDropdown"
                 role="button"
                 data-bs-toggle="dropdown"
               >
-                <i class="fas fa-user me-1"></i>
-                <span th:text="${user.username}">Utilisateur</span>
+                <span sec:authentication="name">Utilisateur</span>
               </a>
               <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="/profile">Mon profil</a></li>
-                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a class="dropdown-item" href="/profile">Mon profil</a>
+                </li>
+                <li>
+                  <hr class="dropdown-divider" />
+                </li>
                 <li>
                   <form th:action="@{/logout}" method="post">
-                    <button class="dropdown-item" type="submit">
+                    <button type="submit" class="dropdown-item">
                       Déconnexion
                     </button>
                   </form>
                 </li>
               </ul>
-            </li>
-          </ul>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
 
-    <!-- Main content -->
+    <!-- Main Content -->
     <main class="container">
-      <!-- Alert messages -->
-      <div
-        th:if="${errorMessage}"
-        class="alert alert-danger alert-dismissible fade show"
-        role="alert"
-      >
-        <span th:text="${errorMessage}">Erreur</span>
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="alert"
-          aria-label="Close"
-        ></button>
+      <!-- Game Info -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 th:text="${game.name}">Partie de Blokus</h2>
+        <div>
+          <span class="badge bg-primary" th:text="${game.status}"
+            >En cours</span
+          >
+          <a href="/games" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="fas fa-arrow-left"></i> Retour
+          </a>
+        </div>
       </div>
+
+      <!-- Alert Messages -->
       <div
         th:if="${successMessage}"
         class="alert alert-success alert-dismissible fade show"
-        role="alert"
       >
-        <span th:text="${successMessage}">Succès</span>
+        <span th:text="${successMessage}"></span>
         <button
           type="button"
           class="btn-close"
           data-bs-dismiss="alert"
-          aria-label="Close"
         ></button>
       </div>
 
-      <!-- Game header -->
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 th:text="${game.name}">Nom de la partie</h1>
-        <div>
-          <a href="/games" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i> Retour
-              </a>
-            </div>
-          </div>
+      <div
+        th:if="${errorMessage}"
+        class="alert alert-danger alert-dismissible fade show"
+      >
+        <span th:text="${errorMessage}"></span>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+        ></button>
+      </div>
 
-      <!-- Game container -->
-      <div class="game-container">
-        <!-- Game sidebar (left) -->
-        <div class="game-sidebar order-2 order-lg-1" style="flex: 0 0 300px">
-          <!-- Players card -->
-          <div class="card">
-            <div class="card-header">
-              <i class="fas fa-users me-2"></i>Joueurs
-            </div>
-            <div class="card-body p-2">
-              <div
-                th:each="player : ${participants}"
-                th:class="${'player-card ' + (player.equals(currentPlayer) ? 'current ' : '') + 
-                                      'player-' + player.color.name().toLowerCase()}"
-              >
-                <div
-                  th:class="${'player-avatar avatar-' + player.color.name().toLowerCase()}"
-                >
-                  <span
-                    th:text="${player.user.username.substring(0, 1).toUpperCase()}"
-                    >U</span
-                  >
-                </div>
-                <div>
-                  <strong th:text="${player.user.username}">Username</strong>
-                  <small
-                    th:if="${player.equals(currentPlayer)}"
-                    class="ms-2 badge bg-info"
-                  >
-                    À son tour
-                </small>
-                </div>
-            </div>
-          </div>
-        </div>
-
-          <!-- Player pieces -->
-          <div class="card">
-            <div
-              class="card-header d-flex justify-content-between align-items-center"
+      <!-- Turn Status -->
+      <div class="alert alert-info mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>Tour actuel:</strong>
+            <span th:text="${currentPlayer.user.username}">Joueur 1</span>
+            <span
+              th:class="'badge ms-2 bg-' + ${currentPlayer.color.toString() == 'BLUE' ? 'primary' : (currentPlayer.color.toString() == 'YELLOW' ? 'warning' : (currentPlayer.color.toString() == 'RED' ? 'danger' : 'success'))}"
+              th:text="${currentPlayer.color}"
             >
-              <span><i class="fas fa-puzzle-piece me-2"></i>Vos pièces</span>
+              BLUE
+            </span>
+          </div>
+          <div>
+            <span
+              id="turn-status"
+              th:class="${isPlayerTurn ? 'text-success' : 'text-danger'}"
+              th:text="${isPlayerTurn ? 'Votre tour' : 'En attente'}"
+            >
+              Status
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Container -->
+      <div class="game-container mb-4">
+        <!-- Blue Player -->
+        <div class="player-pieces-container player-blue-pieces">
+          <div class="player-info">
+            <th:block
+              th:with="bluePlayer=${#lists.isEmpty(participants) ? null : (#lists.size(participants) > 0 ? (participants[0].color.name() == 'BLUE' ? participants[0] : (#lists.size(participants) > 1 ? (participants[1].color.name() == 'BLUE' ? participants[1] : (#lists.size(participants) > 2 ? (participants[2].color.name() == 'BLUE' ? participants[2] : (#lists.size(participants) > 3 ? (participants[3].color.name() == 'BLUE' ? participants[3] : null) : null)) : null)) : null)) : null)}"
+            >
               <span
-                th:class="${'badge ' + (isPlayerTurn ? 'bg-success' : 'bg-secondary')}"
+                th:if="${bluePlayer != null && bluePlayer.user != null}"
+                th:text="${'Joueur Bleu (' + bluePlayer.user.username + ')'}"
+                >Joueur Bleu (Username)</span
               >
-                <span th:if="${isPlayerTurn}">C'est votre tour</span>
-                <span th:unless="${isPlayerTurn}">En attente</span>
-              </span>
-              </div>
-            <div class="card-body p-2">
+              <span
+                th:if="${bluePlayer != null && bluePlayer.user == null}"
+                th:text="'Joueur Bleu (Bot)'"
+                >Joueur Bleu (Bot)</span
+              >
+              <span th:if="${bluePlayer == null}" th:text="'Joueur Bleu'"
+                >Joueur Bleu</span
+              >
+            </th:block>
+          </div>
+          <div class="pieces-container" id="pieces-blue">
+            <th:block th:each="piece : ${allPlayerPieces.get('BLUE')}">
               <div
-                th:if="${isPlayerTurn && !canMove}"
-                class="alert alert-warning mb-2"
+                th:attr="data-piece-id=${piece.id}, 
+                        data-piece-type=${piece.type.name()}, 
+                        data-shape=${piece.shape != null ? #strings.escapeJavaScript(#objects.toString(piece.shape)) : '[]'}"
+                th:class="'piece piece-blue' + (${piece.posX >= 0} ? ' used' : '')"
+                draggable="true"
+                th:onclick="'selectPiece(this, \'' + ${piece.id} + '\')'"
               >
-                <i class="fas fa-exclamation-circle me-1"></i>
-                Vous ne pouvez plus placer de pièces. Passez votre tour.
+                <!-- Render piece based on its shape -->
+                <th:block th:if="${piece.shape != null}">
+                  <th:block th:each="row,rowStat : ${piece.shape}">
+                    <th:block th:each="cell,cellStat : ${row}">
+                      <div
+                        th:class="'piece-cell ' + (${cell} ? 'piece-cell-filled' : '')"
+                      ></div>
+                    </th:block>
+                  </th:block>
+                </th:block>
+                <!-- Fallback if shape is not available -->
+                <th:block th:if="${piece.shape == null}">
+                  <!-- Simple default shape - a single square -->
+                  <div class="piece-cell piece-cell-filled"></div>
+                </th:block>
               </div>
-
-              <div class="pieces-container">
-                <div
-                  th:each="piece : ${availablePieces}"
-                  th:data-piece-id="${piece.id}"
-                  th:data-piece-type="${piece.type}"
-                  th:class="${'piece piece-' + playerColor.name().toLowerCase()}"
-                  onclick="selectPiece(this)"
-                >
-                  <!-- Piece shape will be rendered by JavaScript -->
-              </div>
-            </div>
-
-              <div class="piece-controls">
-                <button
-                  id="btnRotate"
-                  class="btn btn-sm btn-outline-secondary"
-                  onclick="rotatePiece()"
-                >
-                  <i class="fas fa-redo"></i> Rotation
-                </button>
-                <button
-                  id="btnFlip"
-                  class="btn btn-sm btn-outline-secondary"
-                  onclick="flipPiece()"
-                >
-                  <i class="fas fa-exchange-alt"></i> Retourner
-                </button>
-              </div>
-
-              <div class="mt-3">
-                <form
-                  th:if="${isPlayerTurn && !canMove}"
-                  th:action="@{'/games/' + ${game.id} + '/skip'}"
-                  method="post"
-                >
-                  <button type="submit" class="btn btn-warning w-100">
-                    <i class="fas fa-step-forward me-1"></i> Passer mon tour
-                </button>
-                </form>
-              </div>
-              </div>
-            </div>
-
-          <!-- Game rules card -->
-              <div class="card">
-                <div class="card-header">
-              <i class="fas fa-info-circle me-2"></i>Règles du jeu
-                </div>
-            <div class="card-body small">
-              <p class="mb-2">
-                Le but du jeu est de placer un maximum de pièces sur le plateau
-                en respectant les règles suivantes :
-              </p>
-              <ul class="mb-0">
-                <li>Le premier coup doit être joué dans un coin du plateau.</li>
-                <li>
-                  Les pièces suivantes doivent toucher au moins un coin d'une
-                  pièce de même couleur.
-                    </li>
-                <li>Les pièces ne peuvent pas se toucher par les côtés.</li>
-                <li>
-                  Le jeu se termine lorsque plus aucun joueur ne peut placer de
-                  pièce.
-                    </li>
-                  </ul>
-                </div>
+            </th:block>
           </div>
         </div>
 
-        <!-- Game board (right) -->
-        <div class="order-1 order-lg-2" style="flex: 1">
-          <div class="card mb-3">
-            <div class="card-header">
-              <i class="fas fa-chess-board me-2"></i>Plateau de jeu
-            </div>
-            <div class="card-body p-2 text-center">
-              <div id="gameBoard" class="game-board mb-3 mx-auto">
-                <!-- Board cells will be generated by JavaScript -->
+        <!-- Yellow Player -->
+        <div class="player-pieces-container player-yellow-pieces">
+          <div class="player-info">
+            <th:block
+              th:with="yellowPlayer=${#lists.isEmpty(participants) ? null : (#lists.size(participants) > 0 ? (participants[0].color.name() == 'YELLOW' ? participants[0] : (#lists.size(participants) > 1 ? (participants[1].color.name() == 'YELLOW' ? participants[1] : (#lists.size(participants) > 2 ? (participants[2].color.name() == 'YELLOW' ? participants[2] : (#lists.size(participants) > 3 ? (participants[3].color.name() == 'YELLOW' ? participants[3] : null) : null)) : null)) : null)) : null)}"
+            >
+              <span
+                th:if="${yellowPlayer != null && yellowPlayer.user != null}"
+                th:text="${'Joueur Jaune (' + yellowPlayer.user.username + ')'}"
+                >Joueur Jaune (Username)</span
+              >
+              <span
+                th:if="${yellowPlayer != null && yellowPlayer.user == null}"
+                th:text="'Joueur Jaune (Bot)'"
+                >Joueur Jaune (Bot)</span
+              >
+              <span th:if="${yellowPlayer == null}" th:text="'Joueur Jaune'"
+                >Joueur Jaune</span
+              >
+            </th:block>
+          </div>
+          <div class="pieces-container" id="pieces-yellow">
+            <th:block th:each="piece : ${allPlayerPieces.get('YELLOW')}">
+              <div
+                th:attr="data-piece-id=${piece.id}, 
+                        data-piece-type=${piece.type.name()}, 
+                        data-shape=${piece.shape != null ? #strings.escapeJavaScript(#objects.toString(piece.shape)) : '[]'}"
+                th:class="'piece piece-yellow' + (${piece.posX >= 0} ? ' used' : '')"
+                draggable="true"
+                th:onclick="'selectPiece(this, \'' + ${piece.id} + '\')'"
+              >
+                <!-- Render piece based on its shape -->
+                <th:block th:if="${piece.shape != null}">
+                  <th:block th:each="row,rowStat : ${piece.shape}">
+                    <th:block th:each="cell,cellStat : ${row}">
+                      <div
+                        th:class="'piece-cell ' + (${cell} ? 'piece-cell-filled' : '')"
+                      ></div>
+                    </th:block>
+                  </th:block>
+                </th:block>
+                <!-- Fallback if shape is not available -->
+                <th:block th:if="${piece.shape == null}">
+                  <!-- Simple default shape - a single square -->
+                  <div class="piece-cell piece-cell-filled"></div>
+                </th:block>
               </div>
-
-              <div class="piece-preview" id="piecePreview">
-                <!-- Preview of the piece being placed -->
-              </div>
-            </div>
+            </th:block>
           </div>
         </div>
+
+        <!-- Game Board -->
+        <div class="game-board-container">
+          <div class="game-board" id="game-board">
+            <!-- Cells are generated by JavaScript -->
+          </div>
+        </div>
+
+        <!-- Red Player -->
+        <div class="player-pieces-container player-red-pieces">
+          <div class="player-info">
+            <th:block
+              th:with="redPlayer=${#lists.isEmpty(participants) ? null : (#lists.size(participants) > 0 ? (participants[0].color.name() == 'RED' ? participants[0] : (#lists.size(participants) > 1 ? (participants[1].color.name() == 'RED' ? participants[1] : (#lists.size(participants) > 2 ? (participants[2].color.name() == 'RED' ? participants[2] : (#lists.size(participants) > 3 ? (participants[3].color.name() == 'RED' ? participants[3] : null) : null)) : null)) : null)) : null)}"
+            >
+              <span
+                th:if="${redPlayer != null && redPlayer.user != null}"
+                th:text="${'Joueur Rouge (' + redPlayer.user.username + ')'}"
+                >Joueur Rouge (Username)</span
+              >
+              <span
+                th:if="${redPlayer != null && redPlayer.user == null}"
+                th:text="'Joueur Rouge (Bot)'"
+                >Joueur Rouge (Bot)</span
+              >
+              <span th:if="${redPlayer == null}" th:text="'Joueur Rouge'"
+                >Joueur Rouge</span
+              >
+            </th:block>
+          </div>
+          <div class="pieces-container" id="pieces-red">
+            <th:block th:each="piece : ${allPlayerPieces.get('RED')}">
+              <div
+                th:attr="data-piece-id=${piece.id}, 
+                        data-piece-type=${piece.type.name()}, 
+                        data-shape=${piece.shape != null ? #strings.escapeJavaScript(#objects.toString(piece.shape)) : '[]'}"
+                th:class="'piece piece-red' + (${piece.posX >= 0} ? ' used' : '')"
+                draggable="true"
+                th:onclick="'selectPiece(this, \'' + ${piece.id} + '\')'"
+              >
+                <!-- Render piece based on its shape -->
+                <th:block th:if="${piece.shape != null}">
+                  <th:block th:each="row,rowStat : ${piece.shape}">
+                    <th:block th:each="cell,cellStat : ${row}">
+                      <div
+                        th:class="'piece-cell ' + (${cell} ? 'piece-cell-filled' : '')"
+                      ></div>
+                    </th:block>
+                  </th:block>
+                </th:block>
+                <!-- Fallback if shape is not available -->
+                <th:block th:if="${piece.shape == null}">
+                  <!-- Simple default shape - a single square -->
+                  <div class="piece-cell piece-cell-filled"></div>
+                </th:block>
+              </div>
+            </th:block>
+          </div>
+        </div>
+
+        <!-- Green Player -->
+        <div class="player-pieces-container player-green-pieces">
+          <div class="player-info">
+            <th:block
+              th:with="greenPlayer=${#lists.isEmpty(participants) ? null : (#lists.size(participants) > 0 ? (participants[0].color.name() == 'GREEN' ? participants[0] : (#lists.size(participants) > 1 ? (participants[1].color.name() == 'GREEN' ? participants[1] : (#lists.size(participants) > 2 ? (participants[2].color.name() == 'GREEN' ? participants[2] : (#lists.size(participants) > 3 ? (participants[3].color.name() == 'GREEN' ? participants[3] : null) : null)) : null)) : null)) : null)}"
+            >
+              <span
+                th:if="${greenPlayer != null && greenPlayer.user != null}"
+                th:text="${'Joueur Vert (' + greenPlayer.user.username + ')'}"
+                >Joueur Vert (Username)</span
+              >
+              <span
+                th:if="${greenPlayer != null && greenPlayer.user == null}"
+                th:text="'Joueur Vert (Bot)'"
+                >Joueur Vert (Bot)</span
+              >
+              <span th:if="${greenPlayer == null}" th:text="'Joueur Vert'"
+                >Joueur Vert</span
+              >
+            </th:block>
+          </div>
+          <div class="pieces-container" id="pieces-green">
+            <th:block th:each="piece : ${allPlayerPieces.get('GREEN')}">
+              <div
+                th:attr="data-piece-id=${piece.id}, 
+                        data-piece-type=${piece.type.name()}, 
+                        data-shape=${piece.shape != null ? #strings.escapeJavaScript(#objects.toString(piece.shape)) : '[]'}"
+                th:class="'piece piece-green' + (${piece.posX >= 0} ? ' used' : '')"
+                draggable="true"
+                th:onclick="'selectPiece(this, \'' + ${piece.id} + '\')'"
+              >
+                <!-- Render piece based on its shape -->
+                <th:block th:if="${piece.shape != null}">
+                  <th:block th:each="row,rowStat : ${piece.shape}">
+                    <th:block th:each="cell,cellStat : ${row}">
+                      <div
+                        th:class="'piece-cell ' + (${cell} ? 'piece-cell-filled' : '')"
+                      ></div>
+                    </th:block>
+                  </th:block>
+                </th:block>
+                <!-- Fallback if shape is not available -->
+                <th:block th:if="${piece.shape == null}">
+                  <!-- Simple default shape - a single square -->
+                  <div class="piece-cell piece-cell-filled"></div>
+                </th:block>
+              </div>
+            </th:block>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls for current player -->
+      <div class="controls-container mt-4" id="controls-container">
+        <button id="rotate-btn" class="btn btn-primary">
+          <i class="fas fa-redo"></i> Rotation
+        </button>
+        <button id="flip-btn" class="btn btn-secondary">
+          <i class="fas fa-exchange-alt"></i> Retourner
+        </button>
+        <button id="pass-btn" class="btn btn-warning">
+          <i class="fas fa-step-forward"></i> Passer le tour
+        </button>
       </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-dark text-white text-center py-3 mt-5">
-      <div class="container">
-        <p class="mb-0">&copy; 2023 Blokus - Tous droits réservés</p>
+    <footer class="bg-dark text-light py-3 mt-auto">
+      <div class="container text-center">
+        <p class="mb-0">Blokus &copy; 2023 - Tous droits réservés</p>
       </div>
     </footer>
 
-    <!-- Bootstrap JS -->
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/game.js"></script>
+    <script>
+      // Get game ID from URL
+      const path = window.location.pathname;
+      const segments = path.split("/").filter(Boolean);
+      const gameId = segments[segments.indexOf("play") - 1];
 
-    <!-- Game logic -->
-    <script th:inline="javascript">
-      // Game state from server
-      const gameId = [[${game.id}]];
-      const boardState = [[${board.grid}]];
-      const playerColor = [[${playerColor.name()}]];
-      const isPlayerTurn = [[${isPlayerTurn}]];
-      const availablePieces = [[${availablePieces}]];
-
-      // Piece shapes definition (for each piece type)
-      const pieceShapes = {
-          'I1': [[true]],
-          'I2': [[true, true]],
-          'I3': [[true, true, true]],
-          'L3': [[true, false], [true, false], [true, true]],
-          'I4': [[true, true, true, true]],
-          'L4': [[true, false, false], [true, false, false], [true, true, false]],
-          'Z4': [[true, true, false], [false, true, true]],
-          'T4': [[true, true, true], [false, true, false]],
-          'O4': [[true, true], [true, true]],
-          'I5': [[true, true, true, true, true]],
-          'L5': [[true, false, false, false], [true, false, false, false], [true, true, true, true]],
-          'U5': [[true, false, true], [true, true, true]],
-          'Z5': [[true, true, false, false], [false, true, true, true]],
-          'T5': [[true, true, true], [false, true, false], [false, true, false]],
-          'X5': [[false, true, false], [true, true, true], [false, true, false]],
-          'V5': [[true, false, false], [true, false, false], [true, true, true]],
-          'W5': [[true, false, false], [true, true, false], [false, true, true]],
-          'P5': [[true, true], [true, true], [true, false]],
-          'F5': [[false, true, true], [true, true, false], [false, true, false]],
-          'Y5': [[false, true, false, false], [true, true, true, true]],
-          'N5': [[true, false, false, false], [true, true, true, true]]
-      };
-
-      // Game variables
+      // Player and game variables
+      let stompClient = null;
+      let currentPlayerId = null;
       let selectedPiece = null;
-      let selectedPieceRotation = 0;
-      let selectedPieceFlipped = false;
-      let selectedPieceShape = null;
+      let selectedPieceId = null;
+      let rotationValue = 0;
+      let isFlipped = false;
 
-      // Colors for each player
-      const playerColors = {
-          'BLUE': '#2196F3',
-          'YELLOW': '#FFC107',
-          'RED': '#F44336',
-          'GREEN': '#4CAF50'
-      };
+      // Connect to WebSocket when page loads
+      document.addEventListener("DOMContentLoaded", function () {
+        // Connect to WebSocket
+        connectWebSocket();
 
-      // Initialize the game board
-      function initializeBoard() {
-          const board = document.getElementById('gameBoard');
-          board.innerHTML = '';
+        // Initialize game board
+        createEmptyGameBoard();
 
-          for (let y = 0; y < 20; y++) {
-              for (let x = 0; x < 20; x++) {
-                  const cell = document.createElement('div');
-                  cell.className = 'cell';
-                  cell.dataset.x = x;
-                  cell.dataset.y = y;
+        // Setup event listeners
+        setupEventListeners();
 
-                  // Set color based on board state
-                  const cellValue = boardState[y][x];
-                  if (cellValue === 1) {
-                      cell.classList.add('cell-blue');
-                  } else if (cellValue === 2) {
-                      cell.classList.add('cell-yellow');
-                  } else if (cellValue === 3) {
-                      cell.classList.add('cell-red');
-                  } else if (cellValue === 4) {
-                      cell.classList.add('cell-green');
-                  }
+        // Initial game state fetch
+        fetchAllPlayerPieces();
+      });
 
-                  // Add hover event for piece placement
-                  cell.addEventListener('mouseover', function() {
-                      if (selectedPiece && isPlayerTurn) {
-                          showPiecePlacement(parseInt(this.dataset.x), parseInt(this.dataset.y));
-                      }
-                  });
+      // Connect to WebSocket server
+      function connectWebSocket() {
+        const socket = new SockJS("/ws");
+        stompClient = Stomp.over(socket);
 
-                  // Add click event for piece placement
-                  cell.addEventListener('click', function() {
-                      if (selectedPiece && isPlayerTurn) {
-                          placePiece(parseInt(this.dataset.x), parseInt(this.dataset.y));
-                      }
-                  });
+        stompClient.connect(
+          {},
+          function (frame) {
+            console.log("Connected to WebSocket: " + frame);
 
-                  board.appendChild(cell);
+            // Subscribe to game updates
+            stompClient.subscribe("/topic/game/" + gameId, function (message) {
+              const gameState = JSON.parse(message.body);
+              updateGameState(gameState);
+            });
+
+            // Subscribe to error messages
+            stompClient.subscribe(
+              "/topic/game/" + gameId + "/error",
+              function (message) {
+                alert("Error: " + message.body);
               }
+            );
+          },
+          function (error) {
+            console.error("Error connecting to WebSocket:", error);
+            // Fallback to polling if WebSocket fails
+            setInterval(fetchGameState, 3000);
           }
+        );
       }
 
-      // Initialize piece shapes
-      function initializePieces() {
-          const pieceElements = document.querySelectorAll('.piece');
+      // Function to create empty game board
+      function createEmptyGameBoard() {
+        const gameBoard = document.getElementById("game-board");
+        if (!gameBoard) return;
 
-          pieceElements.forEach(element => {
-              const pieceType = element.dataset.pieceType;
-              const pieceShape = pieceShapes[pieceType];
+        gameBoard.innerHTML = "";
 
-              if (pieceShape) {
-                  element.innerHTML = '';
+        for (let y = 0; y < 20; y++) {
+          for (let x = 0; x < 20; x++) {
+            const cell = document.createElement("div");
+            cell.classList.add("cell");
+            cell.dataset.x = x;
+            cell.dataset.y = y;
 
-                  // Create a 5x5 grid for the piece
-                  for (let y = 0; y < 5; y++) {
-                      for (let x = 0; x < 5; x++) {
-                          const cell = document.createElement('div');
-                          cell.className = 'piece-cell';
-
-                          // Check if this cell is part of the piece
-                          if (y < pieceShape.length && x < pieceShape[0].length && pieceShape[y][x]) {
-                              cell.classList.add('piece-cell-filled');
-                          }
-
-                          element.appendChild(cell);
-                      }
-                  }
+            cell.addEventListener("click", function () {
+              if (selectedPiece) {
+                placePiece(x, y);
               }
+            });
+
+            gameBoard.appendChild(cell);
+          }
+        }
+      }
+
+      // Setup event listeners
+      function setupEventListeners() {
+        const rotateBtn = document.getElementById("rotate-btn");
+        const flipBtn = document.getElementById("flip-btn");
+        const passBtn = document.getElementById("pass-btn");
+
+        if (rotateBtn) rotateBtn.addEventListener("click", rotatePiece);
+        if (flipBtn) flipBtn.addEventListener("click", flipPiece);
+        if (passBtn) passBtn.addEventListener("click", passTurn);
+      }
+
+      // Fetch initial game state
+      function fetchAllPlayerPieces() {
+        fetch(`/api/games/${gameId}/state`)
+          .then((response) => {
+            if (!response.ok) throw new Error("Error fetching game state");
+            return response.json();
+          })
+          .then((data) => {
+            updateGameState(data);
+
+            // Check if we need to initialize pieces
+            if (
+              !data.allPlayerPieces ||
+              data.allPlayerPieces.length === 0 ||
+              !data.allPlayerPieces.some(
+                (p) => p.availablePieces && p.availablePieces.length > 0
+              )
+            ) {
+              console.log(
+                "No pieces found. Attempting to initialize pieces..."
+              );
+              initializeGamePieces();
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
           });
+      }
+
+      // Initialize game pieces if needed
+      function initializeGamePieces() {
+        fetch(`/api/games/${gameId}/initialize`, {
+          method: "POST",
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error("Failed to initialize pieces");
+            return response.json();
+          })
+          .then((data) => {
+            console.log("Game pieces initialized:", data);
+            // Fetch updated game state
+            fetchAllPlayerPieces();
+          })
+          .catch((error) => {
+            console.error("Error initializing pieces:", error);
+          });
+      }
+
+      // Update game state based on data
+      function updateGameState(gameState) {
+        console.log("Received game state:", gameState);
+
+        // Update board
+        updateGameBoard(gameState.board.grid);
+
+        // Update current player info
+        const currentPlayerColor = gameState.currentPlayerColor.toLowerCase();
+        currentPlayerId = gameState.currentPlayerId;
+
+        updateCurrentPlayerIndicator(currentPlayerColor);
+
+        // Update pieces for all players
+        if (gameState.allPlayerPieces) {
+          console.log("All player pieces:", gameState.allPlayerPieces);
+          gameState.allPlayerPieces.forEach((playerPieces) => {
+            console.log(
+              `Updating pieces for ${playerPieces.color} player:`,
+              playerPieces.availablePieces
+            );
+            updatePlayerPieces(playerPieces);
+          });
+        } else {
+          console.warn("No allPlayerPieces in game state!", gameState);
+        }
+
+        // Check if it's game over
+        if (gameState.gameOver) {
+          showGameOverMessage();
+        }
+      }
+
+      // Update game board
+      function updateGameBoard(boardState) {
+        const gameBoard = document.getElementById("game-board");
+        if (!gameBoard) return;
+
+        const cells = gameBoard.querySelectorAll(".cell");
+
+        for (let y = 0; y < 20; y++) {
+          for (let x = 0; x < 20; x++) {
+            const cellIndex = y * 20 + x;
+            const cell = cells[cellIndex];
+
+            // Remove existing color classes
+            cell.classList.remove(
+              "cell-blue",
+              "cell-yellow",
+              "cell-red",
+              "cell-green"
+            );
+
+            // Add appropriate color class based on board state
+            const cellValue = boardState[y][x];
+            if (cellValue === 1) cell.classList.add("cell-blue");
+            else if (cellValue === 2) cell.classList.add("cell-yellow");
+            else if (cellValue === 3) cell.classList.add("cell-red");
+            else if (cellValue === 4) cell.classList.add("cell-green");
+          }
+        }
+      }
+
+      // Update current player indicator
+      function updateCurrentPlayerIndicator(currentPlayerColor) {
+        // Update player info headers
+        const playerInfos = document.querySelectorAll(".player-info");
+        playerInfos.forEach((info) => {
+          info.classList.remove("current");
+        });
+
+        const currentPlayerInfo = document.querySelector(
+          `.player-info-${currentPlayerColor}`
+        );
+        if (currentPlayerInfo) {
+          currentPlayerInfo.classList.add("current");
+        }
+
+        // Update turn status
+        const turnStatus = document.getElementById("turn-status");
+        if (turnStatus) {
+          const userId = document.querySelector(
+            'meta[name="user-id"]'
+          )?.content;
+
+          if (userId && userId == currentPlayerId) {
+            turnStatus.textContent = "Votre tour";
+            turnStatus.classList.add("text-success");
+            turnStatus.classList.remove("text-danger");
+            document
+              .getElementById("controls-container")
+              .classList.remove("d-none");
+          } else {
+            turnStatus.textContent =
+              "En attente du joueur " + currentPlayerColor;
+            turnStatus.classList.add("text-danger");
+            turnStatus.classList.remove("text-success");
+            document
+              .getElementById("controls-container")
+              .classList.add("d-none");
+          }
+        }
+      }
+
+      // Update player pieces display
+      function updatePlayerPieces(playerPieces) {
+        const color = playerPieces.color.toLowerCase();
+        const container = document.getElementById(`pieces-${color}`);
+        if (!container) {
+          console.error(`Container not found for player color: ${color}`);
+          return;
+        }
+
+        container.innerHTML = "";
+
+        playerPieces.availablePieces.forEach((piece) => {
+          const pieceElement = document.createElement("div");
+          pieceElement.dataset.pieceId = piece.id;
+          pieceElement.dataset.pieceType = piece.type;
+          pieceElement.dataset.shape = JSON.stringify(piece.shapeGrid);
+          pieceElement.className = `piece piece-${color}${
+            piece.used ? " used" : ""
+          }`;
+          pieceElement.draggable = !piece.used;
+          pieceElement.onclick = () => selectPiece(pieceElement, piece.id);
+
+          // Render the 5x5 grid for the piece
+          if (piece.shapeGrid && Array.isArray(piece.shapeGrid)) {
+            piece.shapeGrid.forEach((row) => {
+              if (Array.isArray(row)) {
+                row.forEach((cell) => {
+                  const cellElement = document.createElement("div");
+                  cellElement.className =
+                    "piece-cell" + (cell === 1 ? " piece-cell-filled" : "");
+                  pieceElement.appendChild(cellElement);
+                });
+              } else {
+                console.error(
+                  "Invalid row data in shapeGrid for piece:",
+                  piece.id,
+                  row
+                );
+              }
+            });
+          } else {
+            console.error(
+              "Missing or invalid shapeGrid for piece:",
+              piece.id,
+              piece.shapeGrid
+            );
+            // Optionally add placeholder content if shape is missing
+            pieceElement.innerHTML = "?"; // Placeholder for missing shape
+          }
+
+          container.appendChild(pieceElement);
+        });
       }
 
       // Select a piece
-      function selectPiece(element) {
-          // Deselect current piece
-          if (selectedPiece) {
-              selectedPiece.classList.remove('selected');
-          }
+      function selectPiece(pieceElement, pieceId) {
+        // Remove selection from previously selected piece
+        if (selectedPiece) {
+          selectedPiece.classList.remove("selected");
+        }
 
-          // Select new piece
-          selectedPiece = element;
-          selectedPiece.classList.add('selected');
+        // Select new piece
+        pieceElement.classList.add("selected");
+        selectedPiece = pieceElement;
+        selectedPieceId = pieceId;
 
-          // Reset rotation and flip
-          selectedPieceRotation = 0;
-          selectedPieceFlipped = false;
-
-          // Get the piece shape
-          const pieceType = selectedPiece.dataset.pieceType;
-          selectedPieceShape = pieceShapes[pieceType];
-
-          // Update preview
-          updatePiecePreview();
+        // Reset rotation and flip
+        rotationValue = 0;
+        isFlipped = false;
       }
 
-      // Rotate the selected piece
+      // Rotate selected piece
       function rotatePiece() {
-          if (!selectedPiece) return;
+        if (!selectedPiece) return;
 
-          selectedPieceRotation = (selectedPieceRotation + 1) % 4;
-          updatePiecePreview();
+        rotationValue = (rotationValue + 90) % 360;
+        selectedPiece.style.transform = `rotate(${rotationValue}deg) ${
+          isFlipped ? "scaleX(-1)" : ""
+        }`;
       }
 
-      // Flip the selected piece
+      // Flip selected piece
       function flipPiece() {
-          if (!selectedPiece) return;
+        if (!selectedPiece) return;
 
-          selectedPieceFlipped = !selectedPieceFlipped;
-          updatePiecePreview();
-      }
-
-      // Update the piece preview
-      function updatePiecePreview() {
-          if (!selectedPiece) return;
-
-          const preview = document.getElementById('piecePreview');
-          preview.innerHTML = '';
-
-          // Get transformed shape
-          const transformedShape = getTransformedPieceShape();
-
-          // Calculate dimensions
-          const height = transformedShape.length;
-          const width = transformedShape[0].length;
-
-          // Set grid template
-          preview.style.gridTemplateColumns = `repeat(${width}, 1fr)`;
-
-          // Create cells
-          for (let y = 0; y < height; y++) {
-              for (let x = 0; x < width; x++) {
-                  const cell = document.createElement('div');
-                  cell.className = 'piece-cell';
-
-                  if (transformedShape[y][x]) {
-                      cell.classList.add('piece-cell-filled');
-                      cell.style.backgroundColor = playerColors[playerColor];
-                  }
-
-                  preview.appendChild(cell);
-              }
-          }
-      }
-
-      // Get transformed piece shape (with rotation and flip applied)
-      function getTransformedPieceShape() {
-          if (!selectedPieceShape) return null;
-
-          let shape = JSON.parse(JSON.stringify(selectedPieceShape)); // Deep copy
-
-          // Apply flip if needed
-          if (selectedPieceFlipped) {
-              shape = shape.map(row => [...row].reverse());
-          }
-
-          // Apply rotation
-          for (let i = 0; i < selectedPieceRotation; i++) {
-              shape = rotateMatrix(shape);
-          }
-
-          return shape;
-      }
-
-      // Rotate a matrix 90 degrees clockwise
-      function rotateMatrix(matrix) {
-          const rows = matrix.length;
-          const cols = matrix[0].length;
-          const result = Array(cols).fill().map(() => Array(rows).fill(false));
-
-          for (let y = 0; y < rows; y++) {
-              for (let x = 0; x < cols; x++) {
-                  result[x][rows - 1 - y] = matrix[y][x];
-              }
-          }
-
-          return result;
-      }
-
-      // Show piece placement preview on hover
-      function showPiecePlacement(x, y) {
-          // Clear previous highlights
-          clearPiecePlacementHighlights();
-
-          if (!selectedPieceShape) return;
-
-          const transformedShape = getTransformedPieceShape();
-          const height = transformedShape.length;
-          const width = transformedShape[0].length;
-
-          // Check if the piece is within bounds
-          if (x + width > 20 || y + height > 20) return;
-
-          // Highlight cells
-          for (let pieceY = 0; pieceY < height; pieceY++) {
-              for (let pieceX = 0; pieceX < width; pieceX++) {
-                  if (transformedShape[pieceY][pieceX]) {
-                      const boardX = x + pieceX;
-                      const boardY = y + pieceY;
-
-                      const cell = document.querySelector(`.cell[data-x="${boardX}"][data-y="${boardY}"]`);
-                      if (cell) {
-                          // Check if the cell is already occupied
-                          if (boardState[boardY][boardX] !== 0) {
-                              cell.style.backgroundColor = 'rgba(255, 0, 0, 0.5)'; // Invalid placement
-                          } else {
-                              cell.style.backgroundColor = playerColors[playerColor] + '80'; // Valid with transparency
-                          }
-
-                          cell.classList.add('highlight');
-                      }
-                  }
-              }
-          }
-      }
-
-      // Clear piece placement highlights
-      function clearPiecePlacementHighlights() {
-          const highlightedCells = document.querySelectorAll('.cell.highlight');
-          highlightedCells.forEach(cell => {
-              cell.style.backgroundColor = '';
-              cell.classList.remove('highlight');
-
-              // Restore original color if needed
-              const x = parseInt(cell.dataset.x);
-              const y = parseInt(cell.dataset.y);
-              const cellValue = boardState[y][x];
-
-              if (cellValue === 1) {
-                  cell.style.backgroundColor = playerColors['BLUE'];
-              } else if (cellValue === 2) {
-                  cell.style.backgroundColor = playerColors['YELLOW'];
-              } else if (cellValue === 3) {
-                  cell.style.backgroundColor = playerColors['RED'];
-              } else if (cellValue === 4) {
-                  cell.style.backgroundColor = playerColors['GREEN'];
-              }
-          });
+        isFlipped = !isFlipped;
+        selectedPiece.style.transform = `rotate(${rotationValue}deg) ${
+          isFlipped ? "scaleX(-1)" : ""
+        }`;
       }
 
       // Place a piece on the board
       function placePiece(x, y) {
-          if (!selectedPiece || !isPlayerTurn) return;
+        if (!selectedPiece || !selectedPieceId) return;
 
-          // Get transformed shape
-          const transformedShape = getTransformedPieceShape();
-          const height = transformedShape.length;
-          const width = transformedShape[0].length;
+        // Convert rotation value to server format (0, 1, 2, 3)
+        const rotationServer = (rotationValue / 90) % 4;
 
-          // Check if the piece is within bounds
-          if (x + width > 20 || y + height > 20) return;
-
-          // Check if all cells are available
-          for (let pieceY = 0; pieceY < height; pieceY++) {
-              for (let pieceX = 0; pieceX < width; pieceX++) {
-                  if (transformedShape[pieceY][pieceX]) {
-                      const boardX = x + pieceX;
-                      const boardY = y + pieceY;
-
-                      if (boardState[boardY][boardX] !== 0) {
-                          return; // Cannot place piece here
-                      }
-                  }
-              }
-          }
-
-          // Send the move to the server
-          const pieceId = selectedPiece.dataset.pieceId;
-          const moveData = {
-              pieceId: pieceId,
-              x: x,
-              y: y,
-              rotation: selectedPieceRotation,
-              flipped: selectedPieceFlipped
+        // Send move via WebSocket if connected
+        if (stompClient && stompClient.connected) {
+          const move = {
+            pieceId: selectedPieceId,
+            x: x,
+            y: y,
+            rotation: rotationServer,
+            flipped: isFlipped,
           };
 
-          // Make AJAX request to check if the move is valid
-          fetch(`/api/games/${gameId}/checkMove`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(moveData)
+          stompClient.send(
+            `/app/game/${gameId}/move`,
+            {},
+            JSON.stringify(move)
+          );
+        } else {
+          // Fallback to REST API
+          fetch(`/api/games/${gameId}/move`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              pieceId: selectedPieceId,
+              x: x,
+              y: y,
+              rotation: rotationServer,
+              flipped: isFlipped,
+            }),
           })
-          .then(response => response.json())
-          .then(data => {
-              if (data.valid) {
-                  // If move is valid, submit it
-                  fetch(`/api/games/${gameId}/move`, {
-                      method: 'POST',
-                      headers: {
-                          'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify(moveData)
-                  })
-                  .then(response => response.json())
-                  .then(data => {
-                      if (data.success) {
-                          // Reload the page to update the game state
-                          window.location.reload();
-                      } else {
-                          alert(`Erreur: ${data.error}`);
-                      }
-                  });
-              } else {
-                  alert("Ce mouvement n'est pas valide selon les règles du jeu.");
-              }
-          });
+            .then((response) => {
+              if (!response.ok) throw new Error("Invalid move");
+              return response.json();
+            })
+            .then((data) => {
+              fetchAllPlayerPieces();
+            })
+            .catch((error) => {
+              console.error("Error placing piece:", error);
+              alert("Invalid move. Please try again.");
+            });
+        }
+
+        // Clear selection
+        selectedPiece.classList.remove("selected");
+        selectedPiece = null;
+        selectedPieceId = null;
       }
 
-      // Initialize the game
-      document.addEventListener('DOMContentLoaded', function() {
-          initializeBoard();
-          initializePieces();
-      });
+      // Pass turn
+      function passTurn() {
+        // Send pass turn via WebSocket if connected
+        if (stompClient && stompClient.connected) {
+          stompClient.send(`/app/game/${gameId}/pass`, {}, "");
+        } else {
+          // Fallback to REST API
+          fetch(`/api/games/${gameId}/skip`, {
+            method: "POST",
+          })
+            .then((response) => {
+              if (!response.ok) throw new Error("Error passing turn");
+              return response.json();
+            })
+            .then((data) => {
+              fetchAllPlayerPieces();
+            })
+            .catch((error) => {
+              console.error("Error passing turn:", error);
+            });
+        }
+      }
+
+      // Get standard piece shape by type
+      function getStandardPieceShape(type) {
+        // Find piece in standard pieces
+        const piece = standardPieces.find((p) => p.type === type);
+        return piece ? piece.shape : [[1]];
+      }
+
+      // Define standard pieces
+      const standardPieces = [
+        // All standard pieces definition (same as in your original code)
+        // ...
+      ];
+
+      // Show game over message
+      function showGameOverMessage() {
+        const turnStatus = document.getElementById("turn-status");
+        if (turnStatus) {
+          turnStatus.textContent = "Partie terminée";
+          turnStatus.classList.remove("text-success", "text-danger");
+        }
+
+        document.getElementById("controls-container").classList.add("d-none");
+      }
     </script>
   </body>
 </html>

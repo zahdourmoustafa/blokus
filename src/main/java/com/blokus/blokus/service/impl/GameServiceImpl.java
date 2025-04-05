@@ -10,8 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.blokus.blokus.dto.GameCreateDto;
 import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
-import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.Game.GameMode;
+import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.GameUser.PlayerColor;
 import com.blokus.blokus.model.User;
@@ -45,7 +45,8 @@ public class GameServiceImpl implements GameService {
         // Create new game with parameters from DTO
         Game game = new Game();
         game.setName(gameDto.getName());
-        game.setExpectedPlayers(gameDto.getMaxPlayers());
+        // Set expected human players (2-4), bots will be added to reach 4 total players
+        game.setExpectedPlayers(gameDto.getMaxPlayers()); 
         game.setMode(gameDto.isTimedMode() ? GameMode.TIMED : GameMode.CLASSIC);
         // Creation date is set automatically via @PrePersist in Game entity
         
@@ -131,8 +132,16 @@ public class GameServiceImpl implements GameService {
     @Override
     public boolean isGameReadyToStart(Long gameId) {
         Game game = findById(gameId);
-        int playerCount = gameUserRepository.countByGameId(gameId);
-        return playerCount >= game.getExpectedPlayers();
+        // Check if we have enough human players as specified in expectedPlayers
+        // The game will automatically add bots to reach 4 total players when starting
+        List<GameUser> players = gameUserRepository.findByGameId(gameId);
+        
+        // Count only human players (non-bot)
+        long humanPlayerCount = players.stream()
+                .filter(player -> !player.isBot())
+                .count();
+                
+        return humanPlayerCount >= game.getExpectedPlayers();
     }
 
     @Override
@@ -144,8 +153,53 @@ public class GameServiceImpl implements GameService {
             throw new IllegalStateException("La partie n'est pas en attente de joueurs");
         }
         
+        // Add bots to fill the game to 4 players
+        fillGameWithBots(game);
+        
         game.setStatus(GameStatus.PLAYING);
         return gameRepository.save(game);
+    }
+
+    /**
+     * Ajoute automatiquement des bots jusqu'à atteindre 4 joueurs au total
+     * 
+     * @param game Le jeu à remplir avec des bots
+     */
+    private void fillGameWithBots(Game game) {
+        List<GameUser> currentPlayers = gameUserRepository.findByGameId(game.getId());
+        
+        // Blokus requires exactly 4 players
+        int botsNeeded = 4 - currentPlayers.size();
+        
+        if (botsNeeded <= 0) {
+            return; // No bots needed
+        }
+        
+        // Available colors
+        PlayerColor[] allColors = {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
+        
+        // Find which colors are already used
+        List<PlayerColor> usedColors = currentPlayers.stream()
+                .map(GameUser::getColor)
+                .collect(Collectors.toList());
+        
+        // Add bots with unused colors
+        for (int i = 0; i < botsNeeded; i++) {
+            GameUser botUser = new GameUser();
+            botUser.setGame(game);
+            botUser.setBot(true);
+            
+            // Find the next available color
+            for (PlayerColor color : allColors) {
+                if (!usedColors.contains(color)) {
+                    botUser.setColor(color);
+                    usedColors.add(color);
+                    break;
+                }
+            }
+            
+            gameUserRepository.save(botUser);
+        }
     }
     
     @Override

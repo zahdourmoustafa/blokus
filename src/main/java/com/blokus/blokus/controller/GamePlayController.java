@@ -1,6 +1,8 @@
 package com.blokus.blokus.controller;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -15,8 +17,10 @@ import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.GameUser;
+import com.blokus.blokus.model.GameUser.PlayerColor;
 import com.blokus.blokus.model.Piece;
 import com.blokus.blokus.model.User;
+import com.blokus.blokus.service.BotService;
 import com.blokus.blokus.service.GameLogicService;
 import com.blokus.blokus.service.GameService;
 import com.blokus.blokus.service.UserService;
@@ -31,18 +35,20 @@ public class GamePlayController {
     private final GameService gameService;
     private final GameLogicService gameLogicService;
     private final UserService userService;
+    private final BotService botService;
 
     public GamePlayController(GameService gameService, GameLogicService gameLogicService,
-                              UserService userService) {
+                              UserService userService, BotService botService) {
         this.gameService = gameService;
         this.gameLogicService = gameLogicService;
         this.userService = userService;
+        this.botService = botService;
     }
     
     /**
      * Show the game play page
      */
-    @GetMapping("/{id}/gameplay")
+    @GetMapping("/{id}/play")
     public String showGamePlay(@PathVariable Long id, Model model,
                              @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails) {
         try {
@@ -70,6 +76,9 @@ public class GamePlayController {
                 return "redirect:/games?error=You are not a participant in this game";
             }
             
+            // Process bot moves if it's a bot's turn
+            botService.handleBotTurn(id);
+            
             // Get current player
             GameUser currentPlayer = gameLogicService.getCurrentPlayer(id);
             boolean isPlayerTurn = currentPlayer.getUser().getId().equals(user.getId());
@@ -83,9 +92,50 @@ public class GamePlayController {
                     .findFirst()
                     .orElseThrow();
             
-            // Get available pieces for the player
-            List<Piece> availablePieces = gameLogicService.getAvailablePieces(id, user.getId());
+            // Get available pieces for the *current* player (for enabling/disabling UI elements)
+            List<Piece> currentAvailablePieces = gameLogicService.getAvailablePieces(id, user.getId());
+
+            // Get available pieces for ALL players
+            Map<PlayerColor, List<Piece>> allPlayerPieces = participants.stream()
+                    .collect(Collectors.toMap(
+                        GameUser::getColor,
+                        p -> {
+                            // Handle case where User might be null (bots)
+                            User playerUser = p.getUser();
+                            if (playerUser == null) {
+                                // For bots or users with null reference, get pieces by GameUser ID instead
+                                return gameLogicService.getAvailablePiecesByGameUserId(id, p.getId());
+                            } else {
+                                return gameLogicService.getAvailablePieces(id, playerUser.getId());
+                            }
+                        }
+                    ));
+
+            // Check if any player has no pieces (might be a problem)
+            boolean anyPlayerHasNoPieces = allPlayerPieces.values().stream().anyMatch(List::isEmpty);
             
+            // If any player has no pieces and game is in playing state, try to initialize
+            if (anyPlayerHasNoPieces && game.getStatus() == GameStatus.PLAYING) {
+                // Initialize pieces for all players
+                List<Piece> initializedPieces = gameLogicService.initializePieces(id);
+                
+                if (!initializedPieces.isEmpty()) {
+                    // Reload all player pieces after initialization
+                    allPlayerPieces = participants.stream()
+                        .collect(Collectors.toMap(
+                            GameUser::getColor,
+                            p -> {
+                                User playerUser = p.getUser();
+                                if (playerUser == null) {
+                                    return gameLogicService.getAvailablePiecesByGameUserId(id, p.getId());
+                                } else {
+                                    return gameLogicService.getAvailablePieces(id, playerUser.getId());
+                                }
+                            }
+                        ));
+                }
+            }
+
             // Check if player can make a move
             boolean canMove = gameLogicService.canPlayerMove(id, user.getId());
             
@@ -96,18 +146,34 @@ public class GamePlayController {
             model.addAttribute("currentPlayer", currentPlayer);
             model.addAttribute("isPlayerTurn", isPlayerTurn);
             model.addAttribute("playerColor", playerGameUser.getColor());
-            model.addAttribute("availablePieces", availablePieces);
+            model.addAttribute("currentAvailablePieces", currentAvailablePieces);
+            model.addAttribute("allPlayerPieces", allPlayerPieces);
             model.addAttribute("canMove", canMove);
             model.addAttribute("user", user);
             
             // If game was just started, initialize pieces
-            if (availablePieces.isEmpty() && game.getStatus() == GameStatus.PLAYING) {
-                List<Piece> pieces = gameLogicService.initializePieces(id);
-                if (!pieces.isEmpty()) {
-                    // Reload the current page without redirect to avoid redirect loop
-                    availablePieces = gameLogicService.getAvailablePieces(id, user.getId());
-                    model.addAttribute("availablePieces", availablePieces);
-                    // Continue to the game/play view instead of redirecting
+            if (currentAvailablePieces.isEmpty() && game.getStatus() == GameStatus.PLAYING && gameLogicService.getAvailablePieces(id, user.getId()).isEmpty()) {
+                // Re-check if pieces are *still* empty after potential initialization race condition/timing issues
+                List<Piece> initializedPieces = gameLogicService.initializePieces(id);
+                if (!initializedPieces.isEmpty()) {
+                    // Reload pieces for all players after initialization
+                     allPlayerPieces = participants.stream()
+                        .collect(Collectors.toMap(
+                            GameUser::getColor,
+                            p -> {
+                                User playerUser = p.getUser();
+                                if (playerUser == null) {
+                                    return gameLogicService.getAvailablePiecesByGameUserId(id, p.getId());
+                                } else {
+                                    return gameLogicService.getAvailablePieces(id, playerUser.getId());
+                                }
+                            }
+                        ));
+                    model.addAttribute("allPlayerPieces", allPlayerPieces); // Update the model
+
+                    // Also update current player's pieces if needed
+                    currentAvailablePieces = gameLogicService.getAvailablePieces(id, user.getId());
+                    model.addAttribute("currentAvailablePieces", currentAvailablePieces);
                 }
             }
         
@@ -141,20 +207,23 @@ public class GamePlayController {
             GameUser currentPlayer = gameLogicService.getCurrentPlayer(id);
             if (!currentPlayer.getUser().getId().equals(user.getId())) {
                 redirectAttributes.addFlashAttribute("errorMessage", "It's not your turn");
-                return "redirect:/games/" + id + "/gameplay";
+                return "redirect:/games/" + id + "/play";
             }
             
             // Check if player can make a move
             boolean canMove = gameLogicService.canPlayerMove(id, user.getId());
             if (canMove) {
                 redirectAttributes.addFlashAttribute("errorMessage", "You still have valid moves available");
-                return "redirect:/games/" + id + "/gameplay";
-        }
+                return "redirect:/games/" + id + "/play";
+            }
         
-        // Move to next player
+            // Move to next player
             gameLogicService.nextTurn(id);
         
-        // Check if game is over
+            // Process bot moves
+            botService.processBotRound(game);
+        
+            // Check if game is over
             if (gameLogicService.isGameOver(id)) {
                 game.setStatus(GameStatus.FINISHED);
                 gameLogicService.calculateScores(id);
@@ -163,10 +232,10 @@ public class GamePlayController {
             }
             
             redirectAttributes.addFlashAttribute("successMessage", "Turn skipped");
-            return "redirect:/games/" + id + "/gameplay";
+            return "redirect:/games/" + id + "/play";
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Error: " + e.getMessage());
-            return "redirect:/games/" + id + "/gameplay";
+            return "redirect:/games/" + id + "/play";
         }
     }
     
@@ -190,11 +259,14 @@ public class GamePlayController {
             // Initialize pieces
             gameLogicService.initializePieces(id);
             
+            // Process bot moves if it's a bot's turn
+            botService.handleBotTurn(id);
+            
             redirectAttributes.addFlashAttribute("successMessage", "Game initialized successfully");
-            return "redirect:/games/" + id + "/gameplay";
+            return "redirect:/games/" + id + "/play";
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Error: " + e.getMessage());
-            return "redirect:/games/" + id + "/gameplay";
+            return "redirect:/games/" + id + "/play";
         }
     }
 } 

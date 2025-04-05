@@ -1,6 +1,14 @@
 package com.blokus.blokus.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "pieces")
@@ -130,31 +138,120 @@ public class Piece {
     // Méthode pour obtenir la forme de base de la pièce selon son type
     private boolean[][] getBaseShape() {
         return switch (type) {
+            // Monomino (1 square) - #1
             case I1 -> new boolean[][] {
                 {true}
             };
+            
+            // Domino (2 squares) - #2
             case I2 -> new boolean[][] {
-                {true, true}
+                {false,true, true}
             };
+            
+            // Triominoes (3 squares) - #3-4
             case I3 -> new boolean[][] {
                 {true, true, true}
             };
             case L3 -> new boolean[][] {
-                {true, false},
+                {false, false},
                 {true, false},
                 {true, true}
             };
+            
+            // Tetrominoes (4 squares) - #5-9
             case I4 -> new boolean[][] {
-                {true, true, true, true}
+                {true,false,false,false},
+                {true,false,false,false},
+                {true,false,false,false},
+                {true,false,false,false}
             };
             case L4 -> new boolean[][] {
-                {true, false, false},
-                {true, false, false},
-                {true, true, false}
+                {false, false, true},
+                {false, false, true},
+                {false, true, true}
             };
-            // Ajouter les autres formes selon besoin...
-            default -> new boolean[][] {
-                {true}
+            case Z4 -> new boolean[][] {
+                {false, false, false},
+                {true, true, false},
+                {false, true, true}
+            };
+            case T4 -> new boolean[][] {
+                {true, true},
+                {false, true},
+                {true, true}
+
+            };
+            case O4 -> new boolean[][] {
+                {false, false},
+                {true, true},
+                {true, true}
+            };
+            
+            // Pentominoes (5 squares) - #10-21
+            case I5 -> new boolean[][] {
+                {true, true, false},
+                {false, true, true},
+                {false, false, true}
+                
+            };
+            case L5 -> new boolean[][] {
+                {true, false, false},
+                {true, false, false},
+                {true, true, true}
+            };
+            case U5 -> new boolean[][] {
+                {true, false, true},
+                {true, true, true}
+            };
+            case Z5 -> new boolean[][] {
+                {true, true, false},
+                {false, true, false},
+                {false, true, true}
+            };
+            case T5 -> new boolean[][] {
+                {true, false, false},
+                {true, true, true},
+                {false, true, false}
+            };
+            case X5 -> new boolean[][] {
+                {false, true, false},
+                {true, true, true},
+                {false, true, false}
+            };
+            case V5 -> new boolean[][] {
+                {false, true, false, false},
+                {false, true, false, false},
+                {false, true, false, false},
+                {true, true, false, false}
+            };
+            case W5 -> new boolean[][] {
+                {true, false,false,false,false},
+                {true, false,false,false,false},
+                {true, false,false,false,false},
+                {true, false,false,false,false},
+                {true, false,false,false,false}
+            };
+            case P5 -> new boolean[][] {
+                {false, true},
+                {true, true},
+                {true, true}
+            };
+            case F5 -> new boolean[][] {
+                {true, false, false, false},
+                {true, true, false, false},
+                {true, false, false, false},
+                {true, false, false, false}
+            };
+            case Y5 -> new boolean[][] {
+                {true, false},
+                {true, true},
+                {true, false}
+            };
+            case N5 -> new boolean[][] {
+                {false, true, false, false},
+                {false, true, false, false},
+                {true, true, false, false},
+                {true, false, false, false}
             };
         };
     }

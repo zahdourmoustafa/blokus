@@ -202,9 +202,7 @@
                   </p>
                   <p>
                     <strong>Joueurs :</strong>
-                    <span
-                      th:text="${game.players.size() + ' / ' + game.expectedPlayers}"
-                    ></span>
+                    <span th:text="${game.players.size() + ' / 4'}"></span>
                   </p>
                 </div>
                 <div class="col-md-6">
@@ -322,12 +320,14 @@
                     </div>
                   </div>
                   <div th:if="${game.status.name() == 'PLAYING'}">
-                    <a
-                      th:href="@{/games/{id}/gameplay(id=${game.id})}"
-                      class="btn btn-success w-100"
-                    >
-                      <i class="fas fa-gamepad me-2"></i>Jouer
-                    </a>
+                    <div class="d-flex justify-content-end mt-3">
+                      <a
+                        class="btn btn-primary"
+                        th:href="@{/games/{id}/play(id=${game.id})}"
+                      >
+                        <i class="fas fa-play me-1"></i> Jouer
+                      </a>
+                    </div>
                   </div>
                   <div th:if="${game.status.name() == 'FINISHED'}">
                     <button class="btn btn-secondary w-100" disabled>
@@ -360,7 +360,9 @@
                   </h6>
                   <p class="mb-0">
                     <i class="fas fa-user me-2"></i>
-                    <span th:text="${player.user.username}"></span>
+                    <span
+                      th:text="${player.isBot ? 'Bot' : player.user.username}"
+                    ></span>
                     <span th:if="${player.isBot}" class="badge bg-warning ms-1"
                       >IA</span
                     >
@@ -371,7 +373,8 @@
               <!-- Placeholder for empty player slots -->
               <div
                 class="col-md-6"
-                th:each="i : ${#numbers.sequence(1, game.expectedPlayers - game.players.size())}"
+                th:if="${game.players.size() < 4}"
+                th:each="i : ${#numbers.sequence(1, 4 - game.players.size())}"
               >
                 <div class="player-card bg-light">
                   <h6 class="text-muted">En attente...</h6>
@@ -429,7 +432,9 @@
                   class="list-group-item d-flex justify-content-between align-items-center"
                   th:each="player : ${game.players}"
                 >
-                  <span th:text="${player.user.username}"></span>
+                  <span
+                    th:text="${player.isBot ? 'Bot' : player.user.username}"
+                  ></span>
                   <span
                     class="badge bg-primary rounded-pill"
                     th:text="${player.score}"

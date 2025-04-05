@@ -1,0 +1,3 @@
+@echo off
+echo Starting H2 Database Server...
+java -cp ./target/dependency/h2*.jar org.h2.tools.Server -tcp -tcpAllowOthers -baseDir ./data 

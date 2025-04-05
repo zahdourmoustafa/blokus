@@ -1,5 +1,6 @@
 package com.blokus.blokus.controller;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,12 +15,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.blokus.blokus.dto.MoveDto;
+import com.blokus.blokus.dto.MoveDTO;
+import com.blokus.blokus.dto.PlayerPiecesDTO;
 import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.Piece;
 import com.blokus.blokus.model.User;
+import com.blokus.blokus.repository.GameUserRepository;
+import com.blokus.blokus.repository.PieceRepository;
+import com.blokus.blokus.service.BotService;
 import com.blokus.blokus.service.GameLogicService;
 import com.blokus.blokus.service.GameService;
 import com.blokus.blokus.service.UserService;
@@ -36,12 +41,19 @@ public class GameStateRestController {
     private final GameService gameService;
     private final GameLogicService gameLogicService;
     private final UserService userService;
+    private final BotService botService;
+    private final GameUserRepository gameUserRepository;
+    private final PieceRepository pieceRepository;
 
     public GameStateRestController(GameService gameService, GameLogicService gameLogicService,
-                                  UserService userService) {
+                                  UserService userService, BotService botService,
+                                  GameUserRepository gameUserRepository, PieceRepository pieceRepository) {
         this.gameService = gameService;
         this.gameLogicService = gameLogicService;
         this.userService = userService;
+        this.botService = botService;
+        this.gameUserRepository = gameUserRepository;
+        this.pieceRepository = pieceRepository;
     }
 
     /**
@@ -52,13 +64,36 @@ public class GameStateRestController {
                                          @AuthenticationPrincipal org.springframework.security.core.userdetails.User principal) {
         try {
             User user = userService.findByUsername(principal.getUsername());
-        Game game = gameService.findById(gameId);
+            Game game = gameService.findById(gameId);
             
-        Board board = game.getBoard();
+            // Process bot turns if necessary
+            botService.handleBotTurn(gameId);
+                
+            Board board = game.getBoard();
             GameUser currentPlayer = gameLogicService.getCurrentPlayer(gameId);
             List<Piece> availablePieces = gameLogicService.getAvailablePieces(gameId, user.getId());
             boolean canMove = gameLogicService.canPlayerMove(gameId, user.getId());
             boolean isPlayerTurn = currentPlayer.getUser().getId().equals(user.getId());
+            
+            // Get all game participants
+            List<GameUser> participants = gameUserRepository.findByGameId(gameId);
+            
+            // Get pieces for all players
+            List<PlayerPiecesDTO> allPlayerPieces = new ArrayList<>();
+            for (GameUser participant : participants) {
+                PlayerPiecesDTO playerPiecesDTO = new PlayerPiecesDTO();
+                
+                User playerUser = participant.getUser();
+                playerPiecesDTO.setUserId(playerUser.getId());
+                playerPiecesDTO.setUsername(playerUser.getUsername());
+                playerPiecesDTO.setColor(participant.getColor());
+                
+                // Get available pieces for this player
+                List<Piece> playerAvailablePieces = gameLogicService.getAvailablePieces(gameId, playerUser.getId());
+                playerPiecesDTO.setAvailablePieces(playerAvailablePieces);
+                
+                allPlayerPieces.add(playerPiecesDTO);
+            }
             
             Map<String, Object> response = new HashMap<>();
             response.put("gameStatus", game.getStatus().name());
@@ -68,6 +103,7 @@ public class GameStateRestController {
             response.put("isPlayerTurn", isPlayerTurn);
             response.put("canMove", canMove);
             response.put("availablePieces", availablePieces.stream().map(Piece::getId).collect(Collectors.toList()));
+            response.put("allPlayerPieces", allPlayerPieces);
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -103,7 +139,7 @@ public class GameStateRestController {
      * Make a move
      */
     @PostMapping("/{gameId}/move")
-    public ResponseEntity<?> makeMove(@PathVariable Long gameId, @Valid @RequestBody MoveDto moveDto,
+    public ResponseEntity<?> makeMove(@PathVariable Long gameId, @Valid @RequestBody MoveDTO moveDTO,
                                      @AuthenticationPrincipal org.springframework.security.core.userdetails.User principal) {
         try {
             User user = userService.findByUsername(principal.getUsername());
@@ -117,15 +153,18 @@ public class GameStateRestController {
             // Try to place the piece
             Board updatedBoard = gameLogicService.placePiece(
                     gameId, 
-                    moveDto.getPieceId(), 
-                    moveDto.getX(), 
-                    moveDto.getY(), 
-                    moveDto.getRotation(),
-                    moveDto.isFlipped()
+                    moveDTO.getPieceId(), 
+                    moveDTO.getX(), 
+                    moveDTO.getY(), 
+                    moveDTO.getRotation(),
+                    moveDTO.isFlipped()
             );
             
-            // Return the updated game state
+            // Process bot turns after the player move
             Game game = gameService.findById(gameId);
+            int botMoves = botService.processBotRound(game);
+            
+            // Get the updated game state after bot moves
             GameUser newCurrentPlayer = gameLogicService.getCurrentPlayer(gameId);
             
             Map<String, Object> response = new HashMap<>();
@@ -134,6 +173,7 @@ public class GameStateRestController {
             response.put("gameStatus", game.getStatus().name());
             response.put("currentPlayer", newCurrentPlayer.getUser().getUsername());
             response.put("currentPlayerColor", newCurrentPlayer.getColor().name());
+            response.put("botMovesPerformed", botMoves);
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -142,7 +182,51 @@ public class GameStateRestController {
     }
     
     /**
-     * Initialize pieces for a new game
+     * Skip a turn
+     */
+    @PostMapping("/{gameId}/skip")
+    public ResponseEntity<?> skipTurn(@PathVariable Long gameId,
+                                     @AuthenticationPrincipal org.springframework.security.core.userdetails.User principal) {
+        try {
+            User user = userService.findByUsername(principal.getUsername());
+            
+            // Validate it's the player's turn
+            GameUser currentPlayer = gameLogicService.getCurrentPlayer(gameId);
+            if (!currentPlayer.getUser().getId().equals(user.getId())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "It's not your turn"));
+            }
+            
+            // Check if player can make a move
+            boolean canMove = gameLogicService.canPlayerMove(gameId, user.getId());
+            if (canMove) {
+                return ResponseEntity.badRequest().body(Map.of("error", "You still have valid moves available"));
+            }
+            
+            // Skip to next player
+            gameLogicService.nextTurn(gameId);
+            
+            // Process bot turns after the player skips
+            Game game = gameService.findById(gameId);
+            int botMoves = botService.processBotRound(game);
+            
+            // Get the updated game state
+            GameUser newCurrentPlayer = gameLogicService.getCurrentPlayer(gameId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("gameStatus", game.getStatus().name());
+            response.put("currentPlayer", newCurrentPlayer.getUser().getUsername());
+            response.put("currentPlayerColor", newCurrentPlayer.getColor().name());
+            response.put("botMovesPerformed", botMoves);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Initialize game pieces
      */
     @PostMapping("/{gameId}/initialize")
     public ResponseEntity<?> initializeGame(@PathVariable Long gameId,
@@ -150,17 +234,34 @@ public class GameStateRestController {
         try {
             // Only game creator can initialize the game
             User user = userService.findByUsername(principal.getUsername());
-        Game game = gameService.findById(gameId);
+            Game game = gameService.findById(gameId);
             GameUser creator = game.getPlayers().get(0);
             
             if (!creator.getUser().getId().equals(user.getId())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Only the game creator can initialize the game"));
             }
             
+            // Check if pieces already exist
+            List<Piece> existingPieces = pieceRepository.findByBoardId(game.getBoard().getId());
+            if (!existingPieces.isEmpty()) {
+                return ResponseEntity.ok(Map.of(
+                    "success", true, 
+                    "piecesCount", existingPieces.size(),
+                    "message", "Pieces already initialized"
+                ));
+            }
+            
             // Initialize pieces
             List<Piece> pieces = gameLogicService.initializePieces(gameId);
             
-            return ResponseEntity.ok(Map.of("success", true, "piecesCount", pieces.size()));
+            // Process bot turns if it's a bot's turn
+            int botMoves = botService.processBotRound(game);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true, 
+                "piecesCount", pieces.size(),
+                "botMovesPerformed", botMoves
+            ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -170,16 +271,25 @@ public class GameStateRestController {
      * Check if a move is valid
      */
     @PostMapping("/{gameId}/checkMove")
-    public ResponseEntity<?> checkMove(@PathVariable Long gameId, @Valid @RequestBody MoveDto moveDto,
+    public ResponseEntity<?> checkMove(@PathVariable Long gameId, @Valid @RequestBody MoveDTO moveDTO,
                                       @AuthenticationPrincipal org.springframework.security.core.userdetails.User principal) {
         try {
+            User user = userService.findByUsername(principal.getUsername());
+            
+            // Validate it's the player's turn
+            GameUser currentPlayer = gameLogicService.getCurrentPlayer(gameId);
+            if (!currentPlayer.getUser().getId().equals(user.getId())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "It's not your turn"));
+            }
+            
+            // Check if the move is valid
             boolean isValid = gameLogicService.isValidMove(
                     gameId, 
-                    moveDto.getPieceId(), 
-                    moveDto.getX(), 
-                    moveDto.getY(), 
-                    moveDto.getRotation(),
-                    moveDto.isFlipped()
+                    moveDTO.getPieceId(), 
+                    moveDTO.getX(), 
+                    moveDTO.getY(), 
+                    moveDTO.getRotation(),
+                    moveDTO.isFlipped()
             );
             
             return ResponseEntity.ok(Map.of("valid", isValid));

@@ -1,11 +1,11 @@
 package com.blokus.blokus.service;
 
+import java.util.List;
+
 import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.Piece;
-
-import java.util.List;
 
 /**
  * Service for game logic operations
@@ -103,4 +103,13 @@ public interface GameLogicService {
      * @return Array with [x, y] coordinates
      */
     int[] getStartCorner(GameUser.PlayerColor color);
+    
+    /**
+     * Get available pieces for a player by GameUser ID
+     * 
+     * @param gameId The game ID
+     * @param gameUserId The GameUser ID (used for bot players that don't have a User)
+     * @return List of available pieces
+     */
+    List<Piece> getAvailablePiecesByGameUserId(Long gameId, Long gameUserId);
 } 

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 /**
  * DTO for transferring move information from client to server
  */
-public class MoveDto {
+public class MoveDTO {
     
     @NotNull
     private Long pieceId;
@@ -22,10 +22,10 @@ public class MoveDto {
     private boolean flipped;
     
     // Constructors
-    public MoveDto() {
+    public MoveDTO() {
     }
     
-    public MoveDto(Long pieceId, Integer x, Integer y, Integer rotation, boolean flipped) {
+    public MoveDTO(Long pieceId, Integer x, Integer y, Integer rotation, boolean flipped) {
         this.pieceId = pieceId;
         this.x = x;
         this.y = y;
