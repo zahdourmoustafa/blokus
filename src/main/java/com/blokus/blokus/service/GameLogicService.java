@@ -1,87 +1,35 @@
 package com.blokus.blokus.service;
 
-import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
-import com.blokus.blokus.model.Piece;
-
-import java.util.List;
 
 /**
- * Service for game logic operations
+ * Service for game logic operations.
+ * Methods related to specific board/piece implementation have been removed.
  */
 public interface GameLogicService {
     
     /**
-     * Initialize pieces for all players in a game
+     * Get the current player whose turn it is.
+     * (Implementation might need adjustment based on how turns are tracked without board state)
      * 
      * @param gameId The game ID
-     * @return List of created pieces
-     */
-    List<Piece> initializePieces(Long gameId);
-    
-    /**
-     * Check if a move is valid according to game rules
-     * 
-     * @param gameId The game ID
-     * @param pieceId The piece ID
-     * @param x The x coordinate
-     * @param y The y coordinate
-     * @param rotation The rotation (0, 90, 180, 270)
-     * @param flipped Whether the piece is flipped or not
-     * @return true if the move is valid, false otherwise
-     */
-    boolean isValidMove(Long gameId, Long pieceId, int x, int y, int rotation, boolean flipped);
-    
-    /**
-     * Place a piece on the board
-     * 
-     * @param gameId The game ID
-     * @param pieceId The piece ID
-     * @param x The x coordinate
-     * @param y The y coordinate
-     * @param rotation The rotation (0, 90, 180, 270)
-     * @param flipped Whether the piece is flipped or not
-     * @return The updated board
-     */
-    Board placePiece(Long gameId, Long pieceId, int x, int y, int rotation, boolean flipped);
-    
-    /**
-     * Get available pieces for a player
-     * 
-     * @param gameId The game ID
-     * @param userId The user ID
-     * @return List of available pieces
-     */
-    List<Piece> getAvailablePieces(Long gameId, Long userId);
-    
-    /**
-     * Get the current player's turn
-     * 
-     * @param gameId The game ID
-     * @return The GameUser whose turn it is
+     * @return The GameUser whose turn it is, or null if not applicable.
      */
     GameUser getCurrentPlayer(Long gameId);
     
     /**
-     * Check if a player can make any valid move
+     * Move to the next player's turn.
+     * (Implementation might need adjustment based on how turns are tracked)
      * 
      * @param gameId The game ID
-     * @param userId The user ID
-     * @return true if player can make a move, false otherwise
-     */
-    boolean canPlayerMove(Long gameId, Long userId);
-    
-    /**
-     * Move to the next player's turn
-     * 
-     * @param gameId The game ID
-     * @return The next player
+     * @return The next player, or null if not applicable.
      */
     GameUser nextTurn(Long gameId);
     
     /**
-     * Check if the game is over
+     * Check if the game is over.
+     * (Implementation might need adjustment based on game rules without specific board state)
      * 
      * @param gameId The game ID
      * @return true if game is over, false otherwise
@@ -89,18 +37,16 @@ public interface GameLogicService {
     boolean isGameOver(Long gameId);
     
     /**
-     * Calculate scores for all players
+     * Calculate scores for all players.
+     * (Implementation might need adjustment based on scoring rules)
      * 
      * @param gameId The game ID
      * @return The game with updated scores
      */
     Game calculateScores(Long gameId);
-    
-    /**
-     * Get the starting corner position for a player
-     * 
-     * @param color The player color
-     * @return Array with [x, y] coordinates
-     */
-    int[] getStartCorner(GameUser.PlayerColor color);
+
+    // Methods removed: 
+    // initializePieces, initializePlayerPieces, isValidMove, placePiece, 
+    // getAvailablePieces, getAllPieces, canPlayerMove, getStartCorner
+
 } 

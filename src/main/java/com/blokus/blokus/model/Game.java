@@ -1,9 +1,20 @@
 package com.blokus.blokus.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "games")
@@ -32,9 +43,6 @@ public class Game {
     
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GameUser> players = new ArrayList<>();
-    
-    @OneToOne(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Board board;
     
     // Enum pour le statut de la partie
     public enum GameStatus {
@@ -109,14 +117,6 @@ public class Game {
 
     public void setPlayers(List<GameUser> players) {
         this.players = players;
-    }
-
-    public Board getBoard() {
-        return board;
-    }
-
-    public void setBoard(Board board) {
-        this.board = board;
     }
     
     // Méthodes utilitaires

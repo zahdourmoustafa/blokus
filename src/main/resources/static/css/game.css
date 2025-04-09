@@ -1,351 +1,225 @@
-/* Styles généraux */
+/* Reset previous styles */
 body {
-  background-color: #8b5a2b; /* Fond brun comme sur l'image de référence */
-  padding-top: 20px;
-  padding-bottom: 50px;
   font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #8b5a2b; /* Wood-like background */
 }
 
 .game-container {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 100px);
-}
-
-.game-header {
-  background-color: #fff;
-  padding: 10px 20px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Disposition du jeu */
-.d-flex.flex-grow-1 {
-  display: flex;
-  justify-content: space-between;
-}
-
-/* Plateau principal */
-.game-board {
-  flex: 1;
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-right: 20px;
-}
-
-/* Carte joueurs */
-.player-info {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.player-card {
+  width: 100%;
+  max-width: 1200px;
+  margin: 20px auto;
+  background-color: #c0a080; /* Wood-like background */
   padding: 10px;
-  border-radius: 5px;
-  min-width: 130px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-}
-
-.player-card.active {
-  box-shadow: 0 0 0 3px #4caf50;
-  transform: translateY(-3px);
-}
-
-.player-blue {
-  background-color: #e3f2fd;
-  color: #0d47a1;
-}
-
-.player-red {
-  background-color: #ffebee;
-  color: #b71c1c;
-}
-
-.player-green {
-  background-color: #e8f5e9;
-  color: #1b5e20;
-}
-
-.player-yellow {
-  background-color: #fffde7;
-  color: #f57f17;
-}
-
-/* Plateau de jeu */
-.board-container {
-  position: relative;
-  padding: 10px;
-  margin-top: 20px;
-}
-
-.board-grid {
   display: grid;
-  grid-template-columns: repeat(20, 25px);
-  grid-template-rows: repeat(20, 25px);
-  gap: 1px;
-  background-color: #e0e0e0;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-}
-
-.cell {
-  width: 25px;
-  height: 25px;
-  background-color: #ffffff;
-  border: 1px solid #e0e0e0;
-  transition: all 0.1s ease;
-}
-
-.cell:hover {
-  background-color: #f5f5f5;
-}
-
-.cell.valid-placement {
-  background-color: rgba(76, 175, 80, 0.3);
-}
-
-.cell.invalid-placement {
-  background-color: rgba(244, 67, 54, 0.3);
-}
-
-.cell.blue {
-  background-color: #0066cc;
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
-}
-
-.cell.red {
-  background-color: #cc3333;
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
-}
-
-.cell.green {
-  background-color: #33cc33;
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
-}
-
-.cell.yellow {
-  background-color: #ffcc00;
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
-}
-
-/* Coins de départ */
-.start-corner {
-  position: absolute;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-}
-
-.blue-corner {
-  top: 10px;
-  left: 10px;
-  background-color: #0066cc;
-}
-
-.yellow-corner {
-  top: 10px;
-  right: 10px;
-  background-color: #ffcc00;
-}
-
-.red-corner {
-  bottom: 10px;
-  right: 10px;
-  background-color: #cc3333;
-}
-
-.green-corner {
-  bottom: 10px;
-  left: 10px;
-  background-color: #33cc33;
-}
-
-/* Panneaux latéraux */
-.side-panel {
-  width: 320px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Pièces joueur */
-.pieces-container {
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  flex: 1;
-  overflow-y: auto;
-}
-
-.pieces-grid {
-  display: flex;
-  flex-wrap: wrap;
+  grid-template-columns: 260px 1fr 260px; /* Fixed width columns */
+  grid-template-rows: auto auto 1fr 1fr; /* More symmetrical rows */
+  grid-template-areas:
+    "controls controls controls"
+    "info info info"
+    "blue-player board orange-player"
+    "green-player board purple-player";
   gap: 10px;
-  justify-content: center;
-  margin-top: 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-.piece-item {
-  cursor: pointer;
-  padding: 5px;
-  background: #f9f9f9;
+/* Game Controls Bar */
+.game-controls-bar {
+  grid-area: controls;
+  background-color: #4682b4; /* Steel Blue */
+  color: white;
+  padding: 5px 10px;
+  text-align: center;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Game Info Bar */
+.game-info-bar {
+  grid-area: info;
+  background-color: #6495ed; /* Cornflower Blue */
+  color: white;
+  padding: 8px;
+  text-align: center;
+  font-weight: bold;
   border-radius: 4px;
-  border: 2px solid transparent;
-  transition: all 0.2s;
-  user-select: none;
-}
-
-.piece-item:hover {
-  background: #f0f0f0;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.piece-item.selected {
-  border-color: #333;
-  background: #e9e9e9;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-.piece-item.dragging {
-  opacity: 0.7;
-  transform: scale(1.05);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
-}
-
-.piece-grid {
-  display: grid;
-  gap: 2px;
-}
-
-.piece-cell {
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-.piece-cell.filled {
-  background-color: currentColor;
-  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.piece-cell.filled.blue {
-  color: #0066cc;
-}
-.piece-cell.filled.yellow {
-  color: #ffcc00;
-}
-.piece-cell.filled.red {
-  color: #cc3333;
-}
-.piece-cell.filled.green {
-  color: #33cc33;
-}
-
-/* Contrôles */
-.game-controls {
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.game-help {
-  background-color: #fff;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-/* Instructions */
-.instruction-list {
-  padding-left: 15px;
-  margin-bottom: 0;
-}
-
-.instruction-list li {
   margin-bottom: 5px;
 }
 
-/* Animation tour suivant */
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.player-card.active {
-  animation: pulse 2s infinite;
-}
-
-/* Styles pour ressembler à l'image de référence */
-.game-container .d-flex.flex-grow-1 {
+/* Game board */
+.game-board-container {
+  grid-area: board;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
   display: flex;
-  gap: 20px;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+  min-height: 700px; /* Ensure board has enough height */
 }
 
 .game-board {
-  flex: 3;
+  border-collapse: collapse;
+  background-color: #ffffff;
+  width: 98%;
+  height: 98%;
+  margin: auto;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-.side-panel {
-  flex: 1;
-  max-width: 320px;
-  min-width: 280px;
+.board-cell {
+  width: 25px;
+  height: 25px;
+  border: 1px solid #d3d3d3;
+  background-color: #f8f8f8;
 }
 
-/* Version mobile */
-@media (max-width: 992px) {
+/* Player areas */
+.player-area {
+  padding: 8px;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  width: 250px; /* Fixed width for all player areas */
+  height: 350px; /* Fixed height for all player areas */
+  box-sizing: border-box;
+  margin: 0; /* Remove any margin */
+}
+
+/* Blue player (Top Left) */
+.player-area-top {
+  grid-area: blue-player;
+  background-color: #add8e6; /* Light Blue */
+  border: 2px solid #0000ff;
+  align-self: start; /* Align to top */
+  justify-self: start; /* Align to left */
+}
+
+/* Green player (Bottom Left) */
+.player-area-left {
+  grid-area: green-player;
+  background-color: #ffb6b6; /* Light Red */
+  border: 2px solid #ff0000; /* Red */
+  align-self: end; /* Align to bottom */
+  justify-self: start; /* Align to left */
+}
+
+/* Orange/Yellow player (Top Right) */
+.player-area-right {
+  grid-area: orange-player;
+  background-color: #fffacd; /* Lemon Chiffon */
+  border: 2px solid #ffd700; /* Gold */
+  align-self: start; /* Align to top */
+  justify-self: end; /* Align to right */
+}
+
+/* Purple player (Bottom Right) */
+.player-area-bottom {
+  grid-area: purple-player;
+  background-color: #90ee90; /* Light Green */
+  border: 2px solid #008000; /* Green */
+  align-self: end; /* Align to bottom */
+  justify-self: end; /* Align to right */
+}
+
+.player-info {
+  font-weight: bold;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.player-pieces {
+  flex-grow: 1;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+  overflow: auto;
+  min-height: 270px; /* Ensure consistent height for piece area */
+}
+
+.player-controls {
+  margin-top: 5px;
+  text-align: center;
+}
+
+.player-controls button {
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+/* Corner markers */
+td[data-x="0"][data-y="0"] {
+  /* Top-left (Blue's corner) */
+  background-color: rgba(0, 0, 255, 0.3);
+}
+td[data-x="19"][data-y="0"] {
+  /* Top-right (Yellow's corner) */
+  background-color: rgba(255, 165, 0, 0.3);
+}
+td[data-x="0"][data-y="19"] {
+  /* Bottom-left (Red's corner) */
+  background-color: rgba(255, 0, 0, 0.3);
+}
+td[data-x="19"][data-y="19"] {
+  /* Bottom-right (Green's corner) */
+  background-color: rgba(0, 128, 0, 0.3);
+}
+
+/* Game control buttons */
+.control-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.control-button {
+  padding: 2px 8px;
+  margin: 0 2px;
+  background-color: #3a6d99;
+  border: 1px solid #295685;
+  color: white;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.game-progress {
+  display: flex;
+  align-items: center;
+}
+
+.game-timer {
+  margin-left: 15px;
+}
+
+/* Media queries for responsive design */
+@media (max-width: 1000px) {
   .game-container {
-    height: auto;
-  }
-
-  .d-flex.flex-grow-1 {
-    flex-direction: column;
-  }
-
-  .side-panel {
-    width: 100%;
-    margin-left: 0;
-    margin-top: 20px;
-  }
-
-  .pieces-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 200px 1fr 200px;
   }
 }
 
-@media (max-width: 576px) {
-  .pieces-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 800px) {
+  .game-container {
+    grid-template-columns: 150px 1fr 150px;
   }
+}
 
-  .cell {
-    width: 20px;
-    height: 20px;
-  }
+/* Progress indicators for game */
+.progress-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
-  .board-grid {
-    grid-template-columns: repeat(20, 20px);
-    grid-template-rows: repeat(20, 20px);
-  }
+.turn-count {
+  font-weight: bold;
 }

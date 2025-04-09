@@ -321,10 +321,10 @@
                   </div>
                   <div th:if="${game.status.name() == 'PLAYING'}">
                     <a
-                      th:href="@{/games/{id}/gameplay(id=${game.id})}"
+                      th:href="@{/games/{id}/play(id=${game.id})}"
                       class="btn btn-success w-100"
                     >
-                      <i class="fas fa-gamepad me-2"></i>Jouer
+                      <i class="fas fa-play"></i> Jouer
                     </a>
                   </div>
                   <div th:if="${game.status.name() == 'FINISHED'}">

@@ -8,14 +8,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.blokus.blokus.dto.GameCreateDto;
-import com.blokus.blokus.model.Board;
 import com.blokus.blokus.model.Game;
-import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.Game.GameMode;
+import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.GameUser.PlayerColor;
 import com.blokus.blokus.model.User;
-import com.blokus.blokus.repository.BoardRepository;
 import com.blokus.blokus.repository.GameRepository;
 import com.blokus.blokus.repository.GameUserRepository;
 import com.blokus.blokus.service.GameService;
@@ -30,13 +28,11 @@ public class GameServiceImpl implements GameService {
 
     private final GameRepository gameRepository;
     private final GameUserRepository gameUserRepository;
-    private final BoardRepository boardRepository;
 
     public GameServiceImpl(GameRepository gameRepository,
-            GameUserRepository gameUserRepository, BoardRepository boardRepository) {
+            GameUserRepository gameUserRepository) {
         this.gameRepository = gameRepository;
         this.gameUserRepository = gameUserRepository;
-        this.boardRepository = boardRepository;
     }
 
     @Override
@@ -65,23 +61,20 @@ public class GameServiceImpl implements GameService {
         
         gameUserRepository.save(gameUser);
         
-        // Initialize empty board
-        Board board = new Board();
-        board.setGame(game);
-        // Board is already initialized with an empty grid in its constructor
-        boardRepository.save(board);
-        
         // Add AI players to fill the remaining slots (up to 4 total players)
         int totalPlayers = 4; // Blokus is always played with 4 players
         int aiPlayersNeeded = totalPlayers - game.getExpectedPlayers();
         
         // Add AI players with the remaining colors
-        PlayerColor[] aiColors = {PlayerColor.RED, PlayerColor.GREEN};
-        if (game.getExpectedPlayers() == 2) {
-            aiColors = new PlayerColor[]{PlayerColor.RED, PlayerColor.GREEN};
+        PlayerColor[] aiColors = {PlayerColor.RED, PlayerColor.GREEN}; // Default for 2 human players
+        if (game.getExpectedPlayers() == 1) {
+             aiColors = new PlayerColor[]{PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
         } else if (game.getExpectedPlayers() == 3) {
             aiColors = new PlayerColor[]{PlayerColor.GREEN};
-        }
+        } // No AI needed if 4 players
+        
+        // Correct loop limit
+        aiPlayersNeeded = Math.min(aiPlayersNeeded, aiColors.length);
         
         for (int i = 0; i < aiPlayersNeeded; i++) {
             GameUser aiPlayer = new GameUser();
@@ -224,11 +217,6 @@ public class GameServiceImpl implements GameService {
         
         // Get all current players (human and AI)
         List<GameUser> allPlayers = gameUserRepository.findByGameId(gameId);
-        
-        // Count human players
-        List<GameUser> humanPlayers = allPlayers.stream()
-                .filter(p -> !p.isBot() && p.getUser() != null)
-                .collect(Collectors.toList());
         
         // Count AI players
         List<GameUser> aiPlayers = allPlayers.stream()

@@ -309,47 +309,10 @@ public class GameController {
             gameService.startGame(id);
             
             redirectAttributes.addFlashAttribute("successMessage", "La partie a été démarrée!");
-            return "redirect:/games/" + id + "/gameplay";
+            return "redirect:/games/" + id + "/play";
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Erreur: " + e.getMessage());
             return "redirect:/games/" + id;
-        }
-    }
-    
-    /**
-     * Affiche l'interface de jeu
-     */
-    @GetMapping("/{id}/play")
-    public String playGame(@PathVariable Long id, Model model,
-            @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
-            RedirectAttributes redirectAttributes) {
-        
-        try {
-            // Récupérer l'utilisateur authentifié
-            User user = userService.findByUsername(userDetails.getUsername());
-            
-            // Récupérer la partie
-            Game game = gameService.findById(id);
-            
-            // Vérifier que la partie est en cours
-            if (game.getStatus() != Game.GameStatus.PLAYING) {
-                return "redirect:/games/" + id;
-            }
-            
-            // Vérifier que l'utilisateur participe à la partie
-            List<GameUser> participants = gameService.getGameParticipants(id);
-            boolean isParticipant = participants.stream()
-                    .anyMatch(p -> p.getUser() != null && p.getUser().getId().equals(user.getId()));
-            
-            if (!isParticipant) {
-                return "redirect:/games/" + id;
-            }
-            
-            // Rediriger vers la nouvelle URL pour éviter le conflit
-            return "redirect:/games/" + id + "/gameplay";
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Erreur: " + e.getMessage());
-            return "redirect:/games";
         }
     }
 } 
