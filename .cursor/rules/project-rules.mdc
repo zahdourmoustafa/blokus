@@ -1,0 +1,136 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Règles du Projet Blokus en Spring MVC
+
+## Structure du Projet
+
+### Architecture
+- Structure en couches obligatoire :
+  - `controller` : Gestion des requêtes HTTP et WebSockets
+  - `service` : Logique métier et règles du jeu
+  - `repository` : Accès aux données via Spring Data JPA
+  - `model` : Entités et objets de domaine
+  - `dto` : Objets de transfert de données
+  - `config` : Configuration Spring
+  - `security` : Configuration Spring Security
+  - `util` : Classes utilitaires
+
+### Conventions de Nommage
+- Classes : PascalCase (ex: `GameController`, `UserService`)
+- Méthodes et variables : camelCase (ex: `createGame()`, `currentPlayer`)
+- Constantes : UPPER_SNAKE_CASE (ex: `MAX_PLAYERS`, `DEFAULT_BOARD_SIZE`)
+- Packages : lowercase (ex: `com.blokus.game`)
+- Tables BD : snake_case (ex: `game_users`, `board_state`)
+
+## Règles de Codage
+
+### Général
+- Utiliser l'injection de dépendances par constructeur (éviter `@Autowired` sur les champs)
+- Aucune logique métier dans les contrôleurs
+- Documenter toutes les classes et méthodes publiques
+- Maximum 80% de complexité cyclomatique
+- Utiliser des DTOs pour les transferts entre couches
+
+### Contrôleurs
+- Préfixer les méthodes selon leur action HTTP (ex: `getGame()`, `createUser()`, `updateProfile()`)
+- Utiliser les annotations de validation (@Valid) sur les DTO
+- Centraliser la gestion des exceptions avec @ControllerAdvice
+- Retourner systématiquement le nom de la vue ou une redirection
+
+### Services
+- Implémenter des interfaces pour tous les services
+- Gérer les transactions au niveau service avec @Transactional
+- Valider les données d'entrée avant traitement
+- Documenter les règles métier complexes en commentaires
+
+### Entités
+- Utiliser les annotations JPA appropriées
+- Implémenter equals() et hashCode() basés sur l'identité métier
+- Éviter les relations bidirectionnelles sauf si nécessaire
+- Définir les contraintes d'intégrité au niveau BD (ex: `@Column(nullable = false)`)
+
+## Règles de Base de Données
+
+### Entités Principales
+- User (id, username, email, password, gamesPlayed, gamesWon)
+- Game (id, name, status, mode, creationDate)
+- GameUser (gameId, userId, color, score, order)
+- Piece (id, shape, color, gameId, userId)
+- Board (id, gameId, currentState)
+
+### Relations
+- Un User peut participer à plusieurs Games (Many-to-Many via GameUser)
+- Une Game a un unique Board (One-to-One)
+- Une Game a plusieurs Pieces (One-to-Many)
+
+## Règles du Jeu Blokus
+
+### Initialisation
+- Plateau 20x20 cases
+- 4 joueurs maximum (humains ou IA)
+- 21 pièces par joueur, chacune d'une couleur différente
+
+### Placement des Pièces
+- Premier coup : une pièce doit toucher le coin de départ du joueur
+- Coups suivants : une pièce doit toucher au moins un coin d'une autre pièce du même joueur
+- Une pièce ne peut pas toucher le côté d'une autre pièce de même couleur
+- Les pièces ne peuvent pas se chevaucher
+
+### Validation
+- Toute tentative de placement doit être validée côté serveur
+- Implémenter des tests exhaustifs pour toutes les règles de placement
+
+## Sécurité
+
+### Authentification
+- Utiliser Spring Security pour l'authentification
+- Stocker les mots de passe avec BCrypt (force minimale 10)
+- Implémenter une protection CSRF pour tous les formulaires
+- Sessions avec timeout de 30 minutes d'inactivité
+
+### Autorisation
+- Deux rôles : USER et ADMIN
+- Vérifier les permissions pour toutes les actions de jeu
+- Un joueur ne peut modifier que ses propres pièces
+
+## Tests
+
+### Couverture
+- Minimum 80% de couverture de code
+- Tests unitaires pour toutes les règles du jeu
+- Tests d'intégration pour les flux principaux
+- Tests MVC pour tous les contrôleurs
+
+### Méthodes
+- Utiliser JUnit 5 et Mockito
+- Créer des fixtures réutilisables pour les scénarios communs
+- Nommer les tests selon le pattern "should_ExpectedBehavior_When_StateUnderTest"
+
+## Livrables
+
+### Attendus
+- Code source complet sur GitHub
+- Rapport final sur le développement
+- Tests couvrant au moins 80% du code
+- Vidéo de démonstration
+- Rapport pédagogique sur Spring MVC, Spring Security et Spring Data JPA
+
+### Délais
+- Suivre les jalons définis dans le plan de développement
+  - Semaine 1: Configuration + Authentification
+  - Semaine 2: Gestion parties + Base BD
+  - Semaine 3: Logique jeu + Tests unitaires
+  - Semaine 4: Interface utilisateur + WebSockets
+  - Semaine 5: Tests intégration + Documentation
+  - Semaine 6: Finalisation + Déploiement
+
+## Références
+- @context.md - Spécifications fonctionnelles
+- @plan_developpement.md - Plan détaillé du développement
+- [Documentation Spring MVC](mdc:https:/docs.spring.io/spring-framework/docs/current/reference/html/web.html)
+- [Documentation Spring Security](mdc:https:/docs.spring.io/spring-security/reference/index.html)
+- [Documentation Spring Data JPA](mdc:https:/spring.io/projects/spring-data-jpa)
+- [Règles officielles Blokus](mdc:https:/en.wikipedia.org/wiki/Blokus)

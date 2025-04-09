@@ -1,6 +1,7 @@
 package com.blokus.blokus.controller;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,6 +98,10 @@ public class GameController {
             
             redirectAttributes.addFlashAttribute("successMessage", "Partie créée avec succès!");
             return "redirect:/games/" + game.getId();
+        } catch (IllegalStateException e) {
+            // Handle duplicate game name error
+            model.addAttribute("errorMessage", e.getMessage());
+            return "game/create";
         } catch (Exception e) {
             model.addAttribute("errorMessage", "Erreur lors de la création de la partie: " + e.getMessage());
             return "game/create";
@@ -128,8 +133,18 @@ public class GameController {
                     && participants.get(0).getUser() != null 
                     && participants.get(0).getUser().getId().equals(user.getId());
             
+            // Separate human players from AI players
+            List<GameUser> humanPlayers = participants.stream()
+                    .filter(p -> !p.isBot() && p.getUser() != null)
+                    .collect(Collectors.toList());
+                    
+            List<GameUser> aiPlayers = participants.stream()
+                    .filter(GameUser::isBot)
+                    .collect(Collectors.toList());
+            
             model.addAttribute("game", game);
-            model.addAttribute("participants", participants);
+            model.addAttribute("humanPlayers", humanPlayers);
+            model.addAttribute("aiPlayers", aiPlayers);
             model.addAttribute("user", user);
             model.addAttribute("isInGame", isInGame);
             model.addAttribute("isCreator", isCreator);

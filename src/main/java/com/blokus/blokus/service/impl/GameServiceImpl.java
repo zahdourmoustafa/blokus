@@ -42,6 +42,11 @@ public class GameServiceImpl implements GameService {
     @Override
     @Transactional
     public Game createGame(GameCreateDto gameDto, User creator) {
+        // Check if a game with the same name already exists
+        if (gameRepository.findByName(gameDto.getName()).isPresent()) {
+            throw new IllegalStateException("Une partie avec ce nom existe déjà. Veuillez choisir un autre nom.");
+        }
+        
         // Create new game with parameters from DTO
         Game game = new Game();
         game.setName(gameDto.getName());
@@ -65,6 +70,26 @@ public class GameServiceImpl implements GameService {
         board.setGame(game);
         // Board is already initialized with an empty grid in its constructor
         boardRepository.save(board);
+        
+        // Add AI players to fill the remaining slots (up to 4 total players)
+        int totalPlayers = 4; // Blokus is always played with 4 players
+        int aiPlayersNeeded = totalPlayers - game.getExpectedPlayers();
+        
+        // Add AI players with the remaining colors
+        PlayerColor[] aiColors = {PlayerColor.RED, PlayerColor.GREEN};
+        if (game.getExpectedPlayers() == 2) {
+            aiColors = new PlayerColor[]{PlayerColor.RED, PlayerColor.GREEN};
+        } else if (game.getExpectedPlayers() == 3) {
+            aiColors = new PlayerColor[]{PlayerColor.GREEN};
+        }
+        
+        for (int i = 0; i < aiPlayersNeeded; i++) {
+            GameUser aiPlayer = new GameUser();
+            aiPlayer.setGame(game);
+            aiPlayer.setBot(true);
+            aiPlayer.setColor(aiColors[i]);
+            gameUserRepository.save(aiPlayer);
+        }
         
         return game;
     }
@@ -96,9 +121,12 @@ public class GameServiceImpl implements GameService {
             throw new IllegalStateException("Vous êtes déjà dans cette partie");
         }
         
-        // Check if game is full
-        List<GameUser> currentPlayers = gameUserRepository.findByGameId(gameId);
-        if (currentPlayers.size() >= game.getExpectedPlayers()) {
+        // Check if game is full (expected human players)
+        List<GameUser> humanPlayers = gameUserRepository.findByGameId(gameId).stream()
+                .filter(p -> !p.isBot() && p.getUser() != null)
+                .collect(Collectors.toList());
+        
+        if (humanPlayers.size() >= game.getExpectedPlayers()) {
             throw new IllegalStateException("La partie est déjà complète");
         }
         
@@ -107,13 +135,13 @@ public class GameServiceImpl implements GameService {
         gameUser.setGame(game);
         gameUser.setUser(user);
         
-        // Assign color based on join order
+        // Assign color based on join order (for human players)
         PlayerColor[] colors = {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
-        gameUser.setColor(colors[currentPlayers.size()]);
+        gameUser.setColor(colors[humanPlayers.size()]);
         
         gameUserRepository.save(gameUser);
         
-        // Check if game should start automatically
+        // Check if all expected human players have joined
         if (isGameReadyToStart(gameId)) {
             startGame(gameId);
         }
@@ -131,8 +159,11 @@ public class GameServiceImpl implements GameService {
     @Override
     public boolean isGameReadyToStart(Long gameId) {
         Game game = findById(gameId);
-        int playerCount = gameUserRepository.countByGameId(gameId);
-        return playerCount >= game.getExpectedPlayers();
+        // Count only human players (not bots)
+        int humanPlayerCount = (int) gameUserRepository.findByGameId(gameId).stream()
+                .filter(p -> !p.isBot() && p.getUser() != null)
+                .count();
+        return humanPlayerCount >= game.getExpectedPlayers();
     }
 
     @Override
@@ -191,26 +222,53 @@ public class GameServiceImpl implements GameService {
             throw new IllegalStateException("Impossible d'ajouter un bot à une partie qui n'est pas en attente");
         }
         
-        List<GameUser> currentPlayers = gameUserRepository.findByGameId(gameId);
-        if (currentPlayers.size() >= game.getExpectedPlayers()) {
-            throw new IllegalStateException("La partie est déjà complète");
+        // Get all current players (human and AI)
+        List<GameUser> allPlayers = gameUserRepository.findByGameId(gameId);
+        
+        // Count human players
+        List<GameUser> humanPlayers = allPlayers.stream()
+                .filter(p -> !p.isBot() && p.getUser() != null)
+                .collect(Collectors.toList());
+        
+        // Count AI players
+        List<GameUser> aiPlayers = allPlayers.stream()
+                .filter(GameUser::isBot)
+                .collect(Collectors.toList());
+        
+        // Calculate maximum number of AI players needed
+        int totalPlayersNeeded = 4; // Blokus is always played with 4 players
+        int maxAiPlayers = totalPlayersNeeded - game.getExpectedPlayers();
+        
+        // Check if we already have enough AI players
+        if (aiPlayers.size() >= maxAiPlayers) {
+            throw new IllegalStateException("Le nombre maximum de bots a déjà été atteint");
+        }
+        
+        // Determine which colors are already taken
+        List<PlayerColor> takenColors = allPlayers.stream()
+                .map(GameUser::getColor)
+                .collect(Collectors.toList());
+        
+        // Find the next available color
+        PlayerColor botColor = null;
+        for (PlayerColor color : PlayerColor.values()) {
+            if (!takenColors.contains(color)) {
+                botColor = color;
+                break;
+            }
+        }
+        
+        if (botColor == null) {
+            throw new IllegalStateException("Aucune couleur disponible pour le bot");
         }
         
         // Créer un bot
         GameUser botUser = new GameUser();
         botUser.setGame(game);
         botUser.setBot(true);
-        
-        // Assigner une couleur en fonction de l'ordre de rejointe
-        PlayerColor[] colors = {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
-        botUser.setColor(colors[currentPlayers.size()]);
+        botUser.setColor(botColor);
         
         gameUserRepository.save(botUser);
-        
-        // Vérifier si la partie devrait démarrer automatiquement
-        if (isGameReadyToStart(gameId)) {
-            startGame(gameId);
-        }
         
         return game;
     }

@@ -202,9 +202,7 @@
                   </p>
                   <p>
                     <strong>Joueurs :</strong>
-                    <span
-                      th:text="${game.players.size() + ' / ' + game.expectedPlayers}"
-                    ></span>
+                    <span th:text="${game.players.size() + ' / 4'}"></span>
                   </p>
                 </div>
                 <div class="col-md-6">
@@ -258,7 +256,7 @@
                           <button
                             type="submit"
                             class="btn btn-secondary w-100 mb-2"
-                            th:disabled="${game.players.size() >= game.expectedPlayers}"
+                            th:disabled="${aiPlayers.size() >= (4 - game.expectedPlayers)}"
                           >
                             <i class="fas fa-robot me-2"></i>Ajouter un bot
                           </button>
@@ -342,43 +340,73 @@
           <!-- Players Section -->
           <div class="mt-4">
             <h5>Joueurs</h5>
-            <div class="row">
-              <!-- Blue Player -->
-              <div class="col-md-6" th:each="player : ${game.players}">
+
+            <!-- Human Players -->
+            <div class="mb-3">
+              <h6><i class="fas fa-user me-2"></i>Joueurs Humains</h6>
+              <div class="row">
+                <div class="col-md-6" th:each="player : ${humanPlayers}">
+                  <div
+                    class="player-card"
+                    th:classappend="${player.color.name() == 'BLUE' ? 'player-blue' : 
+                                                    player.color.name() == 'YELLOW' ? 'player-yellow' : 
+                                                    player.color.name() == 'RED' ? 'player-red' : 'player-green'}"
+                  >
+                    <h6>
+                      <span
+                        th:text="${player.color.name() == 'BLUE' ? 'Bleu' : 
+                                                     player.color.name() == 'YELLOW' ? 'Jaune' : 
+                                                     player.color.name() == 'RED' ? 'Rouge' : 'Vert'}"
+                      ></span>
+                    </h6>
+                    <p class="mb-0">
+                      <i class="fas fa-user me-2"></i>
+                      <span th:text="${player.user.username}"></span>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Placeholder for expected human players -->
                 <div
-                  class="player-card"
-                  th:classappend="${player.color.name() == 'BLUE' ? 'player-blue' : 
-                                                  player.color.name() == 'YELLOW' ? 'player-yellow' : 
-                                                  player.color.name() == 'RED' ? 'player-red' : 'player-green'}"
+                  class="col-md-6"
+                  th:each="i : ${#numbers.sequence(1, game.expectedPlayers - humanPlayers.size())}"
+                  th:if="${game.status.name() == 'WAITING'}"
                 >
-                  <h6>
-                    <span
-                      th:text="${player.color.name() == 'BLUE' ? 'Bleu' : 
-                                                   player.color.name() == 'YELLOW' ? 'Jaune' : 
-                                                   player.color.name() == 'RED' ? 'Rouge' : 'Vert'}"
-                    ></span>
-                  </h6>
-                  <p class="mb-0">
-                    <i class="fas fa-user me-2"></i>
-                    <span th:text="${player.user.username}"></span>
-                    <span th:if="${player.isBot}" class="badge bg-warning ms-1"
-                      >IA</span
-                    >
-                  </p>
+                  <div class="player-card bg-light">
+                    <h6 class="text-muted">En attente...</h6>
+                    <p class="mb-0 text-muted">
+                      <i class="fas fa-user-slash me-2"></i>
+                      Non rempli
+                    </p>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Placeholder for empty player slots -->
-              <div
-                class="col-md-6"
-                th:each="i : ${#numbers.sequence(1, game.expectedPlayers - game.players.size())}"
-              >
-                <div class="player-card bg-light">
-                  <h6 class="text-muted">En attente...</h6>
-                  <p class="mb-0 text-muted">
-                    <i class="fas fa-user-slash me-2"></i>
-                    Non rempli
-                  </p>
+            <!-- AI Players -->
+            <div th:if="${!aiPlayers.isEmpty()}">
+              <h6><i class="fas fa-robot me-2"></i>Joueurs IA</h6>
+              <div class="row">
+                <div class="col-md-6" th:each="player : ${aiPlayers}">
+                  <div
+                    class="player-card"
+                    th:classappend="${player.color.name() == 'BLUE' ? 'player-blue' : 
+                                                    player.color.name() == 'YELLOW' ? 'player-yellow' : 
+                                                    player.color.name() == 'RED' ? 'player-red' : 'player-green'}"
+                  >
+                    <h6>
+                      <span
+                        th:text="${player.color.name() == 'BLUE' ? 'Bleu' : 
+                                                     player.color.name() == 'YELLOW' ? 'Jaune' : 
+                                                     player.color.name() == 'RED' ? 'Rouge' : 'Vert'}"
+                      ></span>
+                    </h6>
+                    <p class="mb-0">
+                      <i class="fas fa-robot me-2"></i>
+                      <span>Bot IA</span>
+                      <span class="badge bg-warning ms-1">IA</span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
