@@ -11,11 +11,31 @@
       <div class="player-area player-area-top">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 0 && participants[0].user != null ? participants[0].user.username : 'CPU'}"
+          th:text="${participants != null && participants.size() > 0 && participants[0].user != null ? participants[0].user.username : 'Blue Player'}"
         >
           Blue Player
         </div>
-        <div class="player-pieces">Available Pieces Area</div>
+        <div class="player-pieces">
+          <!-- Blue Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.blue}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'blue' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Game Board -->
@@ -39,34 +59,109 @@
       <div class="player-area player-area-right">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 3 && participants[3].user != null ? participants[3].user.username : 'CPU'}"
+          th:text="${participants != null && participants.size() > 3 && participants[3].user != null ? participants[3].user.username : 'Yellow Player'}"
         >
           Yellow Player
         </div>
-        <div class="player-pieces">Available Pieces Area</div>
+        <div class="player-pieces">
+          <!-- Yellow Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.yellow}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'yellow' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Red Player (Bottom Left) -->
       <div class="player-area player-area-left">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 2 && participants[2].user != null ? participants[2].user.username : 'CPU'}"
+          th:text="${participants != null && participants.size() > 2 && participants[2].user != null ? participants[2].user.username : 'Red Player'}"
         >
           Red Player
         </div>
-        <div class="player-pieces">Available Pieces Area</div>
+        <div class="player-pieces">
+          <!-- Red Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.red}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'red' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Green Player (Bottom Right) -->
       <div class="player-area player-area-bottom">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 1 && participants[1].user != null ? participants[1].user.username : 'CPU'}"
+          th:text="${participants != null && participants.size() > 1 && participants[1].user != null ? participants[1].user.username : 'Green Player'}"
         >
           Green Player
         </div>
-        <div class="player-pieces">Available Pieces Area</div>
+        <div class="player-pieces">
+          <!-- Green Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.green}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'green' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
+
+    <script th:inline="javascript">
+      document.addEventListener("DOMContentLoaded", function () {
+        // Add click event listeners to game pieces
+        const gamePieces = document.querySelectorAll(".game-piece");
+        gamePieces.forEach((piece) => {
+          piece.addEventListener("click", function () {
+            // Remove selected class from all pieces
+            gamePieces.forEach((p) => p.classList.remove("selected"));
+            // Add selected class to clicked piece
+            this.classList.add("selected");
+          });
+        });
+      });
+    </script>
   </body>
 </html>

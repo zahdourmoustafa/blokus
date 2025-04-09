@@ -12,15 +12,16 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
+import com.blokus.blokus.model.Piece;
+import com.blokus.blokus.model.PieceFactory;
 import com.blokus.blokus.model.User;
 import com.blokus.blokus.service.GameService;
 import com.blokus.blokus.service.UserService;
 
 import jakarta.servlet.http.HttpSession;
 import java.util.List;
-// Import Map, HashMap if needed for pieces/valid positions later
-// import java.util.Map;
-// import java.util.HashMap;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Controller for game play related actions.
@@ -71,16 +72,15 @@ public class GamePlayController {
                  return "redirect:/login";
             }
 
-            // Placeholder: Add available pieces for the current player (replace with actual logic)
-            // List<Piece> availablePieces = gameLogicService.getAvailablePieces(gameId, currentUser.getId());
-            // model.addAttribute("availablePieces", availablePieces);
-
-            // Placeholder: Add selected piece info from session (replace with actual logic)
-            // Long selectedPieceId = (Long) session.getAttribute("selectedPieceId");
-            // if (selectedPieceId != null) { ... handle selected piece ... }
-
-            // Placeholder: Add valid positions (replace with actual logic)
-            // model.addAttribute("validPositions", validPositions);
+            // Create the pieces for each player
+            String[] colors = {"blue", "green", "red", "yellow"};
+            Map<String, List<Piece>> playerPieces = new HashMap<>();
+            
+            for (String color : colors) {
+                playerPieces.put(color, PieceFactory.createPieces(color));
+            }
+            
+            model.addAttribute("playerPieces", playerPieces);
 
             // Get any flash error messages from previous redirects (e.g., invalid move)
             if (model.containsAttribute("errorMessage")) {

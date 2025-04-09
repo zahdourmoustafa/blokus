@@ -142,9 +142,12 @@ body {
   background-color: rgba(255, 255, 255, 0.7);
   border-radius: 4px;
   padding: 8px;
-  text-align: center;
   overflow: auto;
   min-height: 270px; /* Ensure consistent height for piece area */
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
 }
 
 .player-controls {
@@ -222,4 +225,54 @@ td[data-x="19"][data-y="19"] {
 
 .turn-count {
   font-weight: bold;
+}
+
+/* Game Piece Styles */
+.game-piece {
+  display: inline-block;
+  margin: 3px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.game-piece:hover {
+  transform: scale(1.05);
+}
+
+.game-piece.selected {
+  transform: scale(1.1);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.piece-container {
+  display: inline-flex;
+}
+
+.piece-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.piece-cell {
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+
+/* Piece color variations */
+.piece-cell.blue {
+  background-color: #0000ff;
+}
+
+.piece-cell.green {
+  background-color: #008000;
+}
+
+.piece-cell.red {
+  background-color: #ff0000;
+}
+
+.piece-cell.yellow {
+  background-color: #ffd700;
 }
