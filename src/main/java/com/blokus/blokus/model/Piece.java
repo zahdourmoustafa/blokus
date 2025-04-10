@@ -1,6 +1,5 @@
 package com.blokus.blokus.model;
 
-import java.util.Arrays;
 
 /**
  * Represents a Blokus game piece

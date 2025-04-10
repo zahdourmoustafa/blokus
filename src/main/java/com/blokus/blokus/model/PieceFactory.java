@@ -17,31 +17,31 @@ public class PieceFactory {
     public static List<Piece> createPieces(String color) {
         List<Piece> pieces = new ArrayList<>();
         
-        // Piece 1: Single square (1x1)
+        // Piece 1
         pieces.add(new Piece(1, new boolean[][] {
             {true}
         }, color));
         
-        // Piece 2: Domino (1x2)
+        // Piece 2
         pieces.add(new Piece(2, new boolean[][] {
             {true},
             {true}
         }, color));
         
-        // Piece 3: Straight trimino (1x3)
+        // Piece 3
         pieces.add(new Piece(3, new boolean[][] {
             {true},
             {true},
             {true}
         }, color));
         
-        // Piece 4: L-shaped trimino (2x2)
+        // Piece 4
         pieces.add(new Piece(4, new boolean[][] {
             {true, false},
             {true, true}
         }, color));
         
-        // Piece 5: Straight tetromino (1x4)
+        // Piece 5
         pieces.add(new Piece(5, new boolean[][] {
             {true},
             {true},
@@ -49,33 +49,33 @@ public class PieceFactory {
             {true}
         }, color));
         
-        // Piece 6: T-tetromino (3x2)
+        // Piece 6
         pieces.add(new Piece(6, new boolean[][] {
             {false, true},
             {false, true},
             {true, true}
         }, color));
         
-        // Piece 7: L-tetromino (2x3)
+        // Piece 7
         pieces.add(new Piece(7, new boolean[][] {
             {true, false},
             {true, true},
             {true, false}
         }, color));
         
-        // Piece 8: Square tetromino (2x2)
+        // Piece 8
         pieces.add(new Piece(8, new boolean[][] {
             {true, true},
             {true, true}
         }, color));
         
-        // Piece 9: Z-tetromino (3x2)
+        // Piece 9
         pieces.add(new Piece(9, new boolean[][] {
             {true, true, false},
             {false, true, true}
         }, color));
         
-        // Piece 10: Straight pentomino (1x5)
+        // Piece 10
         pieces.add(new Piece(10, new boolean[][] {
             {true},
             {true},
@@ -84,7 +84,7 @@ public class PieceFactory {
             {true}
         }, color));
         
-        // Piece 11: T-pentomino (3x3)
+        // Piece 11
         pieces.add(new Piece(11, new boolean[][] {
             {false, true},
             {false, true},
@@ -92,7 +92,7 @@ public class PieceFactory {
             {true, true,}
         }, color));
         
-        // Piece 12: L-pentomino (3x3)
+        // Piece 12
         pieces.add(new Piece(12, new boolean[][] {
             {false, true},
             {false, true},
@@ -101,14 +101,14 @@ public class PieceFactory {
 
         }, color));
         
-        // Piece 13: Corner pentomino (3x3)
+        // Piece 13
         pieces.add(new Piece(13, new boolean[][] {
             {false, true},
             {true, true},
             {true, true}
         }, color));
         
-        // Piece 14: Plus pentomino (3x3)
+        // Piece 14
         pieces.add(new Piece(14, new boolean[][] {
             {true, true},
             {false, true},
@@ -116,7 +116,7 @@ public class PieceFactory {
 
         }, color));
         
-        // Piece 15: U-pentomino (3x3)
+        // Piece 15
         pieces.add(new Piece(15, new boolean[][] {
             {true, false},
             {true, true},
@@ -125,42 +125,42 @@ public class PieceFactory {
 
         }, color));
         
-        // Piece 16: P-pentomino (2x3)
+        // Piece 16
         pieces.add(new Piece(16, new boolean[][] {
             {false, true, false},
             {false, true, false},
             {true, true, true}
         }, color));
         
-        // Piece 17: W-pentomino (3x3)
+        // Piece 17
         pieces.add(new Piece(17, new boolean[][] {
             {true, false, false},
             {true, false, false},
             {true, true, true}
         }, color));
         
-        // Piece 18: Z-pentomino (3x3)
+        // Piece 18
         pieces.add(new Piece(18, new boolean[][] {
             {true, true, false},
             {false, true, true},
             {false, false, true}
         }, color));
         
-        // Piece 19: F-pentomino (3x3)
+        // Piece 19
         pieces.add(new Piece(19, new boolean[][] {
             {true, false, false},
             {true, true, true},
             {false, false, true}
         }, color));
         
-        // Piece 20: Y-pentomino (2x4)
+        // Piece 20
         pieces.add(new Piece(20, new boolean[][] {
             {true, false, false},
             {true, true, true},
             {false, true,false}
         }, color));
         
-        // Piece 21: N-pentomino (3x3)
+        // Piece 21
         pieces.add(new Piece(21, new boolean[][] {
             {false, true, false},
             {true, true, true},

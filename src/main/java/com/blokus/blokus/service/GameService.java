@@ -102,4 +102,20 @@ public interface GameService {
      * @return La partie annulée, ou null si supprimée
      */
     Game cancelGame(Long gameId, User user);
+    
+    /**
+     * Place a piece on the game board
+     * 
+     * @param gameId The game ID
+     * @param userId The user ID placing the piece
+     * @param pieceId The ID of the piece to place
+     * @param pieceColor The color of the piece
+     * @param x The x-coordinate on the board
+     * @param y The y-coordinate on the board
+     * @param rotation The rotation of the piece (0, 90, 180, 270)
+     * @param flipped Whether the piece is flipped
+     * @return true if the piece was placed successfully, false otherwise
+     */
+    boolean placePiece(Long gameId, Long userId, String pieceId, String pieceColor, 
+                       int x, int y, int rotation, boolean flipped);
 } 

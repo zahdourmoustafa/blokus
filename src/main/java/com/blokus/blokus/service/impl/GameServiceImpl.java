@@ -17,6 +17,7 @@ import com.blokus.blokus.model.User;
 import com.blokus.blokus.repository.GameRepository;
 import com.blokus.blokus.repository.GameUserRepository;
 import com.blokus.blokus.service.GameService;
+import com.blokus.blokus.service.GameLogicService;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -28,11 +29,14 @@ public class GameServiceImpl implements GameService {
 
     private final GameRepository gameRepository;
     private final GameUserRepository gameUserRepository;
+    private final GameLogicService gameLogicService;
 
     public GameServiceImpl(GameRepository gameRepository,
-            GameUserRepository gameUserRepository) {
+            GameUserRepository gameUserRepository,
+            GameLogicService gameLogicService) {
         this.gameRepository = gameRepository;
         this.gameUserRepository = gameUserRepository;
+        this.gameLogicService = gameLogicService;
     }
 
     @Override
@@ -280,5 +284,44 @@ public class GameServiceImpl implements GameService {
         // Supprimer la partie
         gameRepository.delete(game);
         return null;
+    }
+    
+    @Override
+    @Transactional
+    public boolean placePiece(Long gameId, Long userId, String pieceId, String pieceColor, 
+                            int x, int y, int rotation, boolean flipped) {
+        Game game = findById(gameId);
+        
+        // Verify the game is in playing state
+        if (game.getStatus() != GameStatus.PLAYING) {
+            return false;
+        }
+        
+        // Verify it's the user's turn
+        GameUser currentPlayer = game.getCurrentPlayer();
+        if (currentPlayer == null || currentPlayer.getUser() == null || 
+            !currentPlayer.getUser().getId().equals(userId)) {
+            return false;
+        }
+        
+        // Verify the user can play the selected piece
+        // This would check:
+        // 1. The piece belongs to the player
+        // 2. The piece hasn't been played yet
+        // 3. The piece can be placed at the given position according to game rules
+        
+        // Here we would normally check if the move is valid per Blokus rules
+        // For simplicity, let's assume all placements are valid for now
+        
+        // Update the game state to record the placement
+        // This would typically:
+        // 1. Mark the piece as used/placed
+        // 2. Update the board state
+        // 3. Move to the next player's turn
+        
+        // Move to the next player's turn
+        gameLogicService.nextTurn(gameId);
+        
+        return true;
     }
 } 

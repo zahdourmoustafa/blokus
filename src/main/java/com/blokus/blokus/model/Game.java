@@ -44,6 +44,12 @@ public class Game {
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GameUser> players = new ArrayList<>();
     
+    // Reference to the current player (whose turn it is)
+    // Note: This is not mapped as ManyToOne to avoid circular references
+    // since GameUser already has a ManyToOne to Game
+    @Column(name = "current_player_index")
+    private Integer currentPlayerIndex;
+    
     // Enum pour le statut de la partie
     public enum GameStatus {
         WAITING, PLAYING, FINISHED
@@ -140,10 +146,32 @@ public class Game {
             return null;
         }
         
-        // For the simplicity of this fix, we'll return the first player
-        // In a real implementation, you would track the current player index
-        // or have a separate field for the current player
-        return players.get(0);
+        // If currentPlayerIndex is not set, default to the first player
+        if (currentPlayerIndex == null) {
+            return players.isEmpty() ? null : players.get(0);
+        }
+        
+        // Make sure the index is valid
+        if (currentPlayerIndex >= 0 && currentPlayerIndex < players.size()) {
+            return players.get(currentPlayerIndex);
+        }
+        
+        // Fallback to first player if index is invalid
+        return players.isEmpty() ? null : players.get(0);
+    }
+    
+    /**
+     * Sets the current player for the game
+     * @param player The player to set as current
+     */
+    public void setCurrentPlayer(GameUser player) {
+        if (player == null || !players.contains(player)) {
+            // If player is null or not in the game, set to first player or null
+            currentPlayerIndex = players.isEmpty() ? null : 0;
+        } else {
+            // Set to the index of the player in the list
+            currentPlayerIndex = players.indexOf(player);
+        }
     }
     
     // Initialisation
@@ -151,5 +179,6 @@ public class Game {
     public void prePersist() {
         createdAt = LocalDateTime.now();
         status = GameStatus.WAITING;
+        currentPlayerIndex = 0; // Start with the first player
     }
 } 

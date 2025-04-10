@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <title>Blokus Game</title>
     <link rel="stylesheet" th:href="@{/css/game.css}" />
+    <!-- CSRF tokens for AJAX requests -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta
+      name="_csrf_header"
+      th:content="${_csrf != null ? _csrf.headerName : ''}"
+    />
   </head>
   <body>
     <div class="game-container">
@@ -20,7 +26,10 @@
           <div
             th:each="piece : ${playerPieces.blue}"
             class="game-piece"
-            th:attr="data-piece-id=${piece.id}"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='blue'"
+            th:classappend="${(participants != null && participants.size() > 0 && 
+                             participants[0].user != null && 
+                             participants[0].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
           >
             <div class="piece-container">
               <div
@@ -49,6 +58,7 @@
                 class="board-cell"
                 th:each="col : ${#numbers.sequence(0, 19)}"
                 th:attr="data-x=${col}, data-y=${row}"
+                th:onclick="${selectedPieceId != null} ? 'placePiece(' + ${col} + ', ' + ${row} + ');' : ''"
               ></td>
             </tr>
           </tbody>
@@ -68,7 +78,10 @@
           <div
             th:each="piece : ${playerPieces.yellow}"
             class="game-piece"
-            th:attr="data-piece-id=${piece.id}"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='yellow'"
+            th:classappend="${(participants != null && participants.size() > 3 && 
+                             participants[3].user != null && 
+                             participants[3].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
           >
             <div class="piece-container">
               <div
@@ -99,7 +112,10 @@
           <div
             th:each="piece : ${playerPieces.red}"
             class="game-piece"
-            th:attr="data-piece-id=${piece.id}"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='red'"
+            th:classappend="${(participants != null && participants.size() > 2 && 
+                             participants[2].user != null && 
+                             participants[2].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
           >
             <div class="piece-container">
               <div
@@ -130,7 +146,10 @@
           <div
             th:each="piece : ${playerPieces.green}"
             class="game-piece"
-            th:attr="data-piece-id=${piece.id}"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='green'"
+            th:classappend="${(participants != null && participants.size() > 1 && 
+                             participants[1].user != null && 
+                             participants[1].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
           >
             <div class="piece-container">
               <div
@@ -147,21 +166,98 @@
           </div>
         </div>
       </div>
+
+      <!-- Current Player Info -->
+      <div class="game-info">
+        <h3>
+          Current Player:
+          <span
+            th:if="${game.getCurrentPlayer() != null && game.getCurrentPlayer().user != null}"
+            th:text="${game.getCurrentPlayer().user.username}"
+            th:class="${game.getCurrentPlayer().user.id == currentUser.id ? 'current-player-active' : ''}"
+          >
+          </span>
+        </h3>
+      </div>
     </div>
 
-    <script th:inline="javascript">
-      document.addEventListener("DOMContentLoaded", function () {
-        // Add click event listeners to game pieces
-        const gamePieces = document.querySelectorAll(".game-piece");
-        gamePieces.forEach((piece) => {
-          piece.addEventListener("click", function () {
-            // Remove selected class from all pieces
-            gamePieces.forEach((p) => p.classList.remove("selected"));
-            // Add selected class to clicked piece
-            this.classList.add("selected");
-          });
-        });
-      });
-    </script>
+    <!-- Game Status and Messages -->
+    <div class="game-status">
+      <span th:if="${game.status.name() == 'WAITING'}"
+        >Waiting for players to join...</span
+      >
+      <span th:if="${game.status.name() == 'PLAYING'}">Game in progress</span>
+      <span th:if="${game.status.name() == 'FINISHED'}">Game completed</span>
+    </div>
+
+    <!-- Piece Controls - Moved outside the game board container -->
+    <div
+      id="piece-controls"
+      class="piece-controls"
+      th:style="${selectedPieceId != null ? 'display: block;' : 'display: none;'}"
+    >
+      <button id="rotate-left" class="control-button">Rotate Left</button>
+      <button id="rotate-right" class="control-button">Rotate Right</button>
+      <button id="flip" class="control-button">Flip</button>
+      <p class="control-help">
+        Keyboard: Left/Right arrows to rotate, F to flip
+      </p>
+    </div>
+
+    <div
+      th:if="${errorMessage}"
+      class="error-message"
+      th:text="${errorMessage}"
+    ></div>
+
+    <!-- Game Instructions -->
+    <div class="game-instructions" th:if="${selectedPieceId == null}">
+      <p>Select a piece from your available pieces</p>
+    </div>
+    <div class="game-instructions" th:if="${selectedPieceId != null}">
+      <p>
+        Rotate/flip the piece with the controls, then click on the board to
+        place it
+      </p>
+    </div>
+
+    <!-- Forms for server-side actions -->
+    <form
+      id="piece-selection-form"
+      method="post"
+      th:action="@{/games/{gameId}/select-piece(gameId=${game.id})}"
+    >
+      <input type="hidden" id="selectedPieceId" name="pieceId" value="" />
+      <input type="hidden" id="selectedPieceColor" name="pieceColor" value="" />
+    </form>
+
+    <form
+      id="place-piece-form"
+      method="post"
+      th:action="@{/games/{gameId}/place-piece(gameId=${game.id})}"
+      th:if="${selectedPieceId != null}"
+    >
+      <input type="hidden" id="selectedX" name="x" value="" />
+      <input type="hidden" id="selectedY" name="y" value="" />
+      <input
+        type="hidden"
+        id="pieceRotation"
+        name="rotation"
+        th:value="${pieceRotation != null ? pieceRotation : 0}"
+      />
+      <input
+        type="hidden"
+        id="pieceFlipped"
+        name="flipped"
+        th:value="${pieceFlipped != null ? pieceFlipped : false}"
+      />
+    </form>
+
+    <!-- WebSocket libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+    <!-- Include JavaScript -->
+    <script th:src="@{/js/game.js}"></script>
   </body>
 </html>
