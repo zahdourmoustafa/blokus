@@ -1,7 +1,9 @@
 package com.blokus.blokus.service.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -14,10 +16,12 @@ import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.GameUser.PlayerColor;
 import com.blokus.blokus.model.User;
+import com.blokus.blokus.model.Piece;
+import com.blokus.blokus.model.PieceFactory;
 import com.blokus.blokus.repository.GameRepository;
 import com.blokus.blokus.repository.GameUserRepository;
-import com.blokus.blokus.service.GameService;
 import com.blokus.blokus.service.GameLogicService;
+import com.blokus.blokus.service.GameService;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -50,45 +54,111 @@ public class GameServiceImpl implements GameService {
         // Create new game with parameters from DTO
         Game game = new Game();
         game.setName(gameDto.getName());
-        game.setExpectedPlayers(gameDto.getMaxPlayers());
+        
+        // Ensure minimum 2 players
+        int requestedPlayers = gameDto.getMaxPlayers();
+        if (requestedPlayers < 2) {
+            requestedPlayers = 2; // Enforce minimum 2 players
+        }
+        game.setExpectedPlayers(requestedPlayers);
+        
         game.setMode(gameDto.isTimedMode() ? GameMode.TIMED : GameMode.CLASSIC);
+        game.setStatus(GameStatus.WAITING); // Explicitly set status to WAITING
         // Creation date is set automatically via @PrePersist in Game entity
         
         // Save game first to get ID
         game = gameRepository.save(game);
         
-        // Create game-user relationship
-        GameUser gameUser = new GameUser();
-        gameUser.setGame(game);
-        gameUser.setUser(creator);
-        gameUser.setColor(PlayerColor.BLUE); // First player gets blue
+        // Create game-user relationship for creator (always BLUE)
+        GameUser gameUserCreator = new GameUser();
+        gameUserCreator.setGame(game);
+        gameUserCreator.setUser(creator);
+        gameUserCreator.setColor(PlayerColor.BLUE); // First player gets blue
         
-        gameUserRepository.save(gameUser);
+        // Initialize creator's pieces
+        Set<String> creatorPieceIds = PieceFactory.createPieces(PlayerColor.BLUE.name().toLowerCase())
+                .stream()
+                .map(Piece::getId) // Use method reference
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+        gameUserCreator.setAvailablePieceIds(creatorPieceIds);
         
-        // Add AI players to fill the remaining slots (up to 4 total players)
-        int totalPlayers = 4; // Blokus is always played with 4 players
-        int aiPlayersNeeded = totalPlayers - game.getExpectedPlayers();
+        gameUserRepository.save(gameUserCreator); // Save creator
         
-        // Add AI players with the remaining colors
-        PlayerColor[] aiColors = {PlayerColor.RED, PlayerColor.GREEN}; // Default for 2 human players
-        if (game.getExpectedPlayers() == 1) {
-             aiColors = new PlayerColor[]{PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
-        } else if (game.getExpectedPlayers() == 3) {
-            aiColors = new PlayerColor[]{PlayerColor.GREEN};
-        } // No AI needed if 4 players
+        // STANDARD BLOKUS ORDER IS: BLUE, YELLOW, GREEN, RED
+        // Debug add AI players
+        System.out.println("Adding AI players to game " + game.getId() + ", expected human players: " + game.getExpectedPlayers());
         
-        // Correct loop limit
-        aiPlayersNeeded = Math.min(aiPlayersNeeded, aiColors.length);
+        // ALWAYS create AI players for all colors not used by human players
+        // Get existing colors
+        List<PlayerColor> assignedColors = new ArrayList<>();
+        assignedColors.add(PlayerColor.BLUE); // Creator has BLUE
         
-        for (int i = 0; i < aiPlayersNeeded; i++) {
-            GameUser aiPlayer = new GameUser();
-            aiPlayer.setGame(game);
-            aiPlayer.setBot(true);
-            aiPlayer.setColor(aiColors[i]);
-            gameUserRepository.save(aiPlayer);
+        // For 2-player games, we expect a second human to join as YELLOW
+        // So we only add bots for GREEN and RED
+        // YELLOW will be assigned when the second player joins
+        
+        // REMOVE: Don't add a YELLOW bot for 2-player games
+        // The second human player should get the YELLOW color
+        // if (game.getExpectedPlayers() == 2) {
+        //     GameUser yellowBot = new GameUser();
+        //     yellowBot.setGame(game);
+        //     yellowBot.setBot(true);
+        //     yellowBot.setColor(PlayerColor.YELLOW);
+        //     gameUserRepository.save(yellowBot);
+        //     assignedColors.add(PlayerColor.YELLOW);
+        //     System.out.println("Added YELLOW bot for 2-player game to ensure all colors are present");
+        // }
+
+        // Make it explicit that we're expecting a human YELLOW player
+        if (game.getExpectedPlayers() == 2) {
+            System.out.println("Expecting second human player to join as YELLOW");
         }
         
+        // Modified bot creation to initialize pieces
+        if (game.getExpectedPlayers() < 3) { // If expected players is 2, add GREEN bot
+            GameUser greenBot = createAndInitializeBot(game, PlayerColor.GREEN);
+            gameUserRepository.save(greenBot);
+            assignedColors.add(PlayerColor.GREEN);
+            System.out.println("Added GREEN bot with pieces");
+        }
+        
+        if (game.getExpectedPlayers() < 4) { // If expected players is 2 or 3, add RED bot
+            GameUser redBot = createAndInitializeBot(game, PlayerColor.RED);
+            gameUserRepository.save(redBot);
+            assignedColors.add(PlayerColor.RED);
+            System.out.println("Added RED bot with pieces");
+        }
+        
+        System.out.println("Final player setup: " + assignedColors);
+        System.out.println("Waiting for " + (game.getExpectedPlayers() - 1) + " more human players to join");
+        
         return game;
+    }
+
+    // Helper method to create and initialize a bot user
+    private GameUser createAndInitializeBot(Game game, PlayerColor color) {
+        GameUser bot = new GameUser();
+        bot.setGame(game);
+        bot.setBot(true);
+        bot.setColor(color);
+        
+        // Initialize bot's pieces
+        Set<String> botPieceIds = PieceFactory.createPieces(color.name().toLowerCase())
+                .stream()
+                .map(Piece::getId)
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+        
+        System.out.println("==== BOT INITIALIZATION DEBUG ====");
+        System.out.println("Created bot with color: " + color);
+        System.out.println("Initializing " + botPieceIds.size() + " pieces:");
+        botPieceIds.forEach(id -> System.out.println("  - Piece ID: " + id));
+        System.out.println("==== END BOT INITIALIZATION DEBUG ====");
+        
+        bot.setAvailablePieceIds(botPieceIds);
+        
+        return bot;
     }
 
     @Override
@@ -128,15 +198,65 @@ public class GameServiceImpl implements GameService {
         }
         
         // Add user to game with appropriate color
-        GameUser gameUser = new GameUser();
-        gameUser.setGame(game);
-        gameUser.setUser(user);
+        GameUser gameUserJoiner = new GameUser();
+        gameUserJoiner.setGame(game);
+        gameUserJoiner.setUser(user);
         
-        // Assign color based on join order (for human players)
-        PlayerColor[] colors = {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.RED, PlayerColor.GREEN};
-        gameUser.setColor(colors[humanPlayers.size()]);
+        // Find colors already assigned to human players
+        List<PlayerColor> takenHumanColors = humanPlayers.stream()
+                .map(GameUser::getColor)
+                .collect(Collectors.toList());
         
-        gameUserRepository.save(gameUser);
+        // Check how many human players already exist to assign the appropriate color
+        int humanPlayerCount = humanPlayers.size();
+        
+        System.out.println("Assigning color for new player. Current human player count: " + humanPlayerCount);
+        
+        // In a 2-player game, first player is BLUE, second player is YELLOW
+        PlayerColor assignedColor = switch (humanPlayerCount) {
+            case 0 -> {
+                System.out.println("Assigning BLUE to first human player");
+                yield PlayerColor.BLUE;
+            }
+            case 1 -> {
+                System.out.println("Assigning YELLOW to second human player");
+                yield PlayerColor.YELLOW;
+            }
+            case 2 -> {
+                System.out.println("Assigning GREEN to third human player");
+                yield PlayerColor.GREEN;
+            }
+            default -> {
+                System.out.println("Assigning RED to fourth human player");
+                yield PlayerColor.RED;
+            }
+        };
+        
+        // If the color is already taken by another human player, find the next available
+        if (takenHumanColors.contains(assignedColor)) {
+            System.out.println("Color " + assignedColor + " is already taken by a human player");
+            
+            // Find the first available color in the standard order
+            for (PlayerColor color : new PlayerColor[] {PlayerColor.BLUE, PlayerColor.YELLOW, PlayerColor.GREEN, PlayerColor.RED}) {
+                if (!takenHumanColors.contains(color)) {
+                    assignedColor = color;
+                    System.out.println("Reassigning to next available color: " + assignedColor);
+                    break;
+                }
+            }
+        }
+
+        gameUserJoiner.setColor(assignedColor);
+        
+        // Initialize joining player's pieces
+        Set<String> joinerPieceIds = PieceFactory.createPieces(assignedColor.name().toLowerCase())
+                .stream()
+                .map(Piece::getId)
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+        gameUserJoiner.setAvailablePieceIds(joinerPieceIds);
+        
+        gameUserRepository.save(gameUserJoiner); // Save joining player
         
         // Check if all expected human players have joined
         if (isGameReadyToStart(gameId)) {
@@ -169,11 +289,123 @@ public class GameServiceImpl implements GameService {
         Game game = findById(gameId);
         
         if (game.getStatus() != GameStatus.WAITING) {
-            throw new IllegalStateException("La partie n'est pas en attente de joueurs");
+            throw new IllegalStateException("La partie n'est pas en état d'attente");
         }
         
+        List<GameUser> players = gameUserRepository.findByGameId(gameId);
+        if (players.isEmpty()) {
+            throw new IllegalStateException("Pas de joueurs dans la partie");
+        }
+        
+        // Debug
+        System.out.println("Starting game: " + game.getId() + " with " + players.size() + " players");
+        
+        // Sort players by color to ensure consistent turn order
+        // Standard Blokus order: BLUE, YELLOW, GREEN, RED
+        List<GameUser> sortedPlayers = players.stream()
+                .sorted((p1, p2) -> {
+                    if (p1.getColor() == null || p2.getColor() == null) {
+                        return 0;
+                    }
+                    // Get numeric order for color
+                    int order1 = getColorOrder(p1.getColor());
+                    int order2 = getColorOrder(p2.getColor());
+                    return Integer.compare(order1, order2);
+                })
+                .collect(Collectors.toList());
+        
+        // Print player order debug info
+        System.out.println("PLAYER ORDER IN GAME:");
+        for (int i = 0; i < sortedPlayers.size(); i++) {
+            GameUser player = sortedPlayers.get(i);
+            String playerName = player.isBot() ? "Bot " + player.getColor() : 
+                                               (player.getUser() != null ? player.getUser().getUsername() : "Unknown");
+            System.out.println(i + ": " + playerName + " (" + player.getColor() + ")");
+        }
+        
+        // Check if YELLOW color is missing - we need it for proper turn order
+        boolean hasYellow = false;
+        
+        for (GameUser player : sortedPlayers) {
+            if (player.getColor() == PlayerColor.YELLOW) {
+                hasYellow = true;
+                break;
+            }
+        }
+        
+        // Make sure all colors are represented (important for turn order)
+        if (!hasYellow) {
+            // Only add a Yellow bot if there are fewer than 2 human players
+            List<GameUser> humanPlayers = sortedPlayers.stream()
+                    .filter(p -> !p.isBot() && p.getUser() != null)
+                    .collect(Collectors.toList());
+            
+            if (humanPlayers.size() < 2) {
+                System.out.println("WARNING: No YELLOW player found, adding YELLOW bot as no second human player joined");
+                GameUser yellowBot = new GameUser();
+                yellowBot.setGame(game);
+                yellowBot.setBot(true);
+                yellowBot.setColor(PlayerColor.YELLOW);
+                gameUserRepository.save(yellowBot);
+                sortedPlayers.add(yellowBot); // Add to sorted list
+                // Re-sort the list to maintain order
+                sortedPlayers = sortedPlayers.stream()
+                        .sorted((p1, p2) -> {
+                            if (p1.getColor() == null || p2.getColor() == null) {
+                                return 0;
+                            }
+                            int order1 = getColorOrder(p1.getColor());
+                            int order2 = getColorOrder(p2.getColor());
+                            return Integer.compare(order1, order2);
+                        })
+                        .collect(Collectors.toList());
+            } else {
+                System.out.println("ERROR: Two human players but no YELLOW player! Check color assignment logic.");
+            }
+        }
+        
+        // Start the game
         game.setStatus(GameStatus.PLAYING);
+        
+        // Set first player (always BLUE)
+        GameUser firstPlayer = null;
+        for (GameUser player : sortedPlayers) {
+            if (player.getColor() == PlayerColor.BLUE) {
+                firstPlayer = player;
+                break;
+            }
+        }
+        
+        if (firstPlayer == null && !sortedPlayers.isEmpty()) {
+            firstPlayer = sortedPlayers.get(0);
+            System.out.println("WARNING: No BLUE player found! Using first player as starting player: " + 
+                             firstPlayer.getColor());
+        }
+        
+        if (firstPlayer != null) {
+            game.setCurrentPlayer(firstPlayer);
+            System.out.println("First player set to: " + 
+                             (firstPlayer.isBot() ? "Bot " + firstPlayer.getColor() : 
+                              (firstPlayer.getUser() != null ? firstPlayer.getUser().getUsername() : "Unknown")) + 
+                             " with color " + firstPlayer.getColor());
+        } else {
+            System.out.println("ERROR: No players available to set as first player");
+        }
+        
         return gameRepository.save(game);
+    }
+    
+    /**
+     * Get the ordinal value for a color based on standard Blokus order
+     */
+    private int getColorOrder(PlayerColor color) {
+        return switch (color) {
+            case BLUE -> 1;
+            case YELLOW -> 2;
+            case GREEN -> 3;
+            case RED -> 4;
+            default -> 99; // Any other colors (shouldn't happen)
+        };
     }
     
     @Override
@@ -254,13 +486,14 @@ public class GameServiceImpl implements GameService {
             throw new IllegalStateException("Aucune couleur disponible pour le bot");
         }
         
-        // Créer un bot
-        GameUser botUser = new GameUser();
-        botUser.setGame(game);
-        botUser.setBot(true);
-        botUser.setColor(botColor);
+        // Créer un bot USING THE HELPER METHOD to ensure pieces are initialized
+        GameUser botUser = createAndInitializeBot(game, botColor);
+        // botUser.setGame(game); // Already done in helper
+        // botUser.setBot(true); // Already done in helper
+        // botUser.setColor(botColor); // Already done in helper
         
         gameUserRepository.save(botUser);
+        System.out.println("Added " + botColor + " bot with pieces initialized."); // Added log
         
         return game;
     }
@@ -290,7 +523,10 @@ public class GameServiceImpl implements GameService {
     @Transactional
     public boolean placePiece(Long gameId, Long userId, String pieceId, String pieceColor, 
                             int x, int y, int rotation, boolean flipped) {
-        Game game = findById(gameId);
+        // THIS METHOD IS NOW REDUNDANT HERE - Logic moved to GameLogicServiceImpl
+        // Keep it here for compatibility or remove if confirmed unused elsewhere
+        // Currently, it lacks the piece removal logic.
+         Game game = findById(gameId);
         
         // Verify the game is in playing state
         if (game.getStatus() != GameStatus.PLAYING) {
@@ -299,29 +535,15 @@ public class GameServiceImpl implements GameService {
         
         // Verify it's the user's turn
         GameUser currentPlayer = game.getCurrentPlayer();
-        if (currentPlayer == null || currentPlayer.getUser() == null || 
+         if (currentPlayer == null || currentPlayer.isBot() || // Added check for bot
+            currentPlayer.getUser() == null || 
             !currentPlayer.getUser().getId().equals(userId)) {
-            return false;
+            return false; // Not this human player's turn
         }
         
-        // Verify the user can play the selected piece
-        // This would check:
-        // 1. The piece belongs to the player
-        // 2. The piece hasn't been played yet
-        // 3. The piece can be placed at the given position according to game rules
-        
-        // Here we would normally check if the move is valid per Blokus rules
-        // For simplicity, let's assume all placements are valid for now
-        
-        // Update the game state to record the placement
-        // This would typically:
-        // 1. Mark the piece as used/placed
-        // 2. Update the board state
-        // 3. Move to the next player's turn
-        
-        // Move to the next player's turn
-        gameLogicService.nextTurn(gameId);
-        
-        return true;
+        // Delegate actual placement and validation to GameLogicService
+        boolean placed = gameLogicService.placePiece(gameId, userId, pieceId, pieceColor, x, y, rotation, flipped);
+
+        return placed;
     }
 } 

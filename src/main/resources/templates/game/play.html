@@ -17,19 +17,23 @@
       <div class="player-area player-area-top">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 0 && participants[0].user != null ? participants[0].user.username : 'Blue Player'}"
+          th:text="${participants != null && participants.size() > 0 ? 
+                    (participants[0].isBot() ? 'Bot Blue' : 
+                    (participants[0].user != null ? participants[0].user.username : 'Blue Player')) : 'Blue Player'}"
+          th:classappend="${participants != null && participants.size() > 0 && participants[0].isBot() ? 'bot-player' : ''}"
         >
           Blue Player
         </div>
-        <div class="player-pieces">
+        <div class="player-pieces" data-player-color="blue">
           <!-- Blue Player Pieces -->
           <div
             th:each="piece : ${playerPieces.blue}"
             class="game-piece"
             th:attr="data-piece-id=${piece.id}, data-piece-color='blue'"
             th:classappend="${(participants != null && participants.size() > 0 && 
-                             participants[0].user != null && 
-                             participants[0].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
+                             ((participants[0].isBot()) || (participants[0].user != null && participants[0].user.id == currentUser.id))) 
+                             ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
           >
             <div class="piece-container">
               <div
@@ -69,19 +73,23 @@
       <div class="player-area player-area-right">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 3 && participants[3].user != null ? participants[3].user.username : 'Yellow Player'}"
+          th:text="${participants != null && participants.size() > 3 ? 
+                    (participants[3].isBot() ? 'Bot Yellow' : 
+                    (participants[3].user != null ? participants[3].user.username : 'Yellow Player')) : 'Yellow Player'}"
+          th:classappend="${participants != null && participants.size() > 3 && participants[3].isBot() ? 'bot-player' : ''}"
         >
           Yellow Player
         </div>
-        <div class="player-pieces">
+        <div class="player-pieces" data-player-color="yellow">
           <!-- Yellow Player Pieces -->
           <div
             th:each="piece : ${playerPieces.yellow}"
             class="game-piece"
             th:attr="data-piece-id=${piece.id}, data-piece-color='yellow'"
             th:classappend="${(participants != null && participants.size() > 3 && 
-                             participants[3].user != null && 
-                             participants[3].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
+                            ((participants[3].isBot()) || (participants[3].user != null && participants[3].user.id == currentUser.id))) 
+                            ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
           >
             <div class="piece-container">
               <div
@@ -103,19 +111,23 @@
       <div class="player-area player-area-left">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 2 && participants[2].user != null ? participants[2].user.username : 'Red Player'}"
+          th:text="${participants != null && participants.size() > 2 ? 
+                    (participants[2].isBot() ? 'Bot Red' : 
+                    (participants[2].user != null ? participants[2].user.username : 'Red Player')) : 'Red Player'}"
+          th:classappend="${participants != null && participants.size() > 2 && participants[2].isBot() ? 'bot-player' : ''}"
         >
           Red Player
         </div>
-        <div class="player-pieces">
+        <div class="player-pieces" data-player-color="red">
           <!-- Red Player Pieces -->
           <div
             th:each="piece : ${playerPieces.red}"
             class="game-piece"
             th:attr="data-piece-id=${piece.id}, data-piece-color='red'"
             th:classappend="${(participants != null && participants.size() > 2 && 
-                             participants[2].user != null && 
-                             participants[2].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
+                            ((participants[2].isBot()) || (participants[2].user != null && participants[2].user.id == currentUser.id))) 
+                            ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
           >
             <div class="piece-container">
               <div
@@ -137,19 +149,23 @@
       <div class="player-area player-area-bottom">
         <div
           class="player-info"
-          th:text="${participants != null && participants.size() > 1 && participants[1].user != null ? participants[1].user.username : 'Green Player'}"
+          th:text="${participants != null && participants.size() > 1 ? 
+                    (participants[1].isBot() ? 'Bot Green' : 
+                    (participants[1].user != null ? participants[1].user.username : 'Green Player')) : 'Green Player'}"
+          th:classappend="${participants != null && participants.size() > 1 && participants[1].isBot() ? 'bot-player' : ''}"
         >
           Green Player
         </div>
-        <div class="player-pieces">
+        <div class="player-pieces" data-player-color="green">
           <!-- Green Player Pieces -->
           <div
             th:each="piece : ${playerPieces.green}"
             class="game-piece"
             th:attr="data-piece-id=${piece.id}, data-piece-color='green'"
             th:classappend="${(participants != null && participants.size() > 1 && 
-                             participants[1].user != null && 
-                             participants[1].user.id == currentUser.id) ? 'selectable' : 'disabled'}"
+                            ((participants[1].isBot()) || (participants[1].user != null && participants[1].user.id == currentUser.id))) 
+                            ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
           >
             <div class="piece-container">
               <div
@@ -172,14 +188,25 @@
         <h3>
           Current Player:
           <span
-            th:if="${game.getCurrentPlayer() != null && game.getCurrentPlayer().user != null}"
-            th:text="${game.getCurrentPlayer().user.username}"
-            th:class="${game.getCurrentPlayer().user.id == currentUser.id ? 'current-player-active' : ''}"
+            id="current-player"
+            th:if="${game.getCurrentPlayer() != null}"
+            th:text="${game.getCurrentPlayer().isBot() ? 
+                     'Bot ' + #strings.capitalize(#strings.toLowerCase(game.getCurrentPlayer().getColor().name())) : 
+                     (game.getCurrentPlayer().user != null ? game.getCurrentPlayer().user.username : 'Unknown')}"
+            th:class="${game.getCurrentPlayer().user != null && game.getCurrentPlayer().user.id == currentUser.id ? 'current-player-active' : ''}"
           >
           </span>
         </h3>
       </div>
     </div>
+
+    <!-- Current User Information (Hidden) -->
+    <div
+      class="current-user"
+      style="display: none"
+      th:attr="data-username=${currentUser.username},
+                  data-id=${currentUser.id}"
+    ></div>
 
     <!-- Game Status and Messages -->
     <div class="game-status">
@@ -189,6 +216,9 @@
       <span th:if="${game.status.name() == 'PLAYING'}">Game in progress</span>
       <span th:if="${game.status.name() == 'FINISHED'}">Game completed</span>
     </div>
+
+    <!-- Game message notifications -->
+    <div class="game-message" style="display: none"></div>
 
     <!-- Piece Controls - Moved outside the game board container -->
     <div
@@ -219,6 +249,25 @@
         Rotate/flip the piece with the controls, then click on the board to
         place it
       </p>
+    </div>
+
+    <!-- Debugging tools -->
+    <div
+      class="debug-controls"
+      style="margin-top: 20px; text-align: center; display: block"
+    >
+      <button
+        onclick="enableCurrentPlayerPieces()"
+        style="
+          padding: 10px;
+          background-color: #007bff;
+          color: white;
+          border: none;
+          cursor: pointer;
+        "
+      >
+        Enable My Pieces
+      </button>
     </div>
 
     <!-- Forms for server-side actions -->

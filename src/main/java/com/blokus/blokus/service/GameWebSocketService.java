@@ -2,6 +2,8 @@ package com.blokus.blokus.service;
 
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +14,8 @@ import com.blokus.blokus.dto.GameUpdateDTO;
  */
 @Service
 public class GameWebSocketService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(GameWebSocketService.class);
     
     private final SimpMessagingTemplate messagingTemplate;
     
@@ -29,7 +33,22 @@ public class GameWebSocketService {
      */
     public void sendGameUpdate(Long gameId, String type, String message, Map<String, Object> data) {
         GameUpdateDTO update = new GameUpdateDTO(gameId, type, message, data);
+        logger.info("[WebSocket] Sending update: type={}, message={}, data={}", type, message, data);
         messagingTemplate.convertAndSend("/topic/games/" + gameId, update);
+    }
+    
+    /**
+     * Notify clients that the game state has changed.
+     * 
+     * @param gameId The ID of the game
+     */
+    public void notifyGameStateChanged(Long gameId) {
+        Map<String, Object> data = Map.of(
+            "timestamp", System.currentTimeMillis()
+        );
+        
+        sendGameUpdate(gameId, "GAME_STATE_CHANGED", 
+                     "The game state has been updated", data);
     }
     
     /**
@@ -65,10 +84,12 @@ public class GameWebSocketService {
      * Send a next turn update
      * 
      * @param gameId The ID of the game
+     * @param nextPlayerColor The color of the next player
      * @param nextPlayerUsername The username of the next player
      */
-    public void sendNextTurnUpdate(Long gameId, String nextPlayerUsername) {
+    public void sendNextTurnUpdate(Long gameId, String nextPlayerColor, String nextPlayerUsername) {
         Map<String, Object> data = Map.of(
+            "nextPlayerColor", nextPlayerColor,
             "nextPlayerUsername", nextPlayerUsername
         );
         

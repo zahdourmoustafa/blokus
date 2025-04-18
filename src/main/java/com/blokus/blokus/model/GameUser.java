@@ -1,6 +1,8 @@
 package com.blokus.blokus.model;
 
 import jakarta.persistence.*;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "game_users")
@@ -23,6 +25,11 @@ public class GameUser {
     private int score;
     
     private boolean isBot;
+    
+    @ElementCollection(fetch = FetchType.EAGER) // Eager fetch might be needed depending on usage
+    @CollectionTable(name = "game_user_available_pieces", joinColumns = @JoinColumn(name = "game_user_id"))
+    @Column(name = "piece_id")
+    private Set<String> availablePieceIds = new HashSet<>();
     
     // Enum for player colors
     public enum PlayerColor {
@@ -76,5 +83,13 @@ public class GameUser {
 
     public void setBot(boolean bot) {
         isBot = bot;
+    }
+
+    public Set<String> getAvailablePieceIds() {
+        return availablePieceIds;
+    }
+
+    public void setAvailablePieceIds(Set<String> availablePieceIds) {
+        this.availablePieceIds = availablePieceIds;
     }
 } 

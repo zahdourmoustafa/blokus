@@ -2,6 +2,8 @@ package com.blokus.blokus.service;
 
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Service for game logic operations.
@@ -60,6 +62,14 @@ public interface GameLogicService {
      */
     boolean placePiece(Long gameId, Long userId, String pieceId, String pieceColor, 
                        int x, int y, Integer rotation, Boolean flipped);
+
+    /**
+     * Get all pieces that have been placed in the game
+     * 
+     * @param gameId The game ID
+     * @return A list of maps containing information about each placed piece
+     */
+    List<Map<String, Object>> getPlacedPieces(Long gameId);
 
     // Methods removed: 
     // initializePieces, initializePlayerPieces, isValidMove, placePiece, 

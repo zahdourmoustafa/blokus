@@ -34,6 +34,19 @@ build/
 .history/
 *.code-workspace
 *.vsix
+.cursor/
 
 ### Project Specific ###
 /instructions/
+/docs/
+
+### Data/Database ###
+/data/
+*.mv.db
+*.trace.db
+
+
+
+### OS files ###
+.DS_Store
+Thumbs.db

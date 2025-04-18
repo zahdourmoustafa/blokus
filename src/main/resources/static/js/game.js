@@ -1,75 +1,121 @@
 /**
  * Blokus Game Client-side Logic
- * Handles piece selection and placement
  */
 
-// Global variables
-let selectedPiece = null;
-let piecePreview = null;
-let stompClient = null;
-let gameId = null;
+// ==========================================
+// GLOBAL STATE AND INITIALIZATION
+// ==========================================
+const GameState = {
+  selectedPiece: null,
+  selectedRotation: 0,
+  selectedFlipped: false,
+  selectedColor: null,
+  usedPieceIds: new Set(),
+  usedPieceByColor: {
+    blue: new Set(),
+    yellow: new Set(),
+    red: new Set(),
+    green: new Set(),
+  },
+  piecePreview: null,
+  stompClient: null,
+  gameId: null,
+  currentUsername: null,
+  board: Array(20)
+    .fill()
+    .map(() => Array(20).fill(null)),
+};
 
+// Initialize game when DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
-  // Get game ID from the URL
+  initializeGame();
+});
+
+/**
+ * Initialize all game components
+ */
+function initializeGame() {
+  // Get game ID from URL
   const path = window.location.pathname;
   const pathParts = path.split("/");
   const gameIdIndex = pathParts.indexOf("games") + 1;
 
   if (gameIdIndex > 0 && gameIdIndex < pathParts.length) {
-    gameId = pathParts[gameIdIndex];
+    GameState.gameId = pathParts[gameIdIndex];
   }
 
-  // Initialize piece selection event listeners
+  // Initialize current username
+  const currentUserElement = document.querySelector(".current-user");
+  if (currentUserElement) {
+    GameState.currentUsername =
+      currentUserElement.getAttribute("data-username");
+  }
+
+  // If that didn't work, check player areas for selectable pieces
+  if (!GameState.currentUsername) {
+    const playerInfoElements = document.querySelectorAll(".player-info");
+    playerInfoElements.forEach((element) => {
+      const selectablePieces = element.parentElement.querySelectorAll(
+        ".game-piece.selectable"
+      );
+      if (selectablePieces.length > 0) {
+        GameState.currentUsername = element.textContent.trim();
+      }
+    });
+  }
+
+  // Initialize game components
   initializePieceSelection();
-
-  // Initialize board hover effect for placement preview
   initializeBoardHover();
-
-  // Initialize WebSocket for real-time updates
   initializeWebSocket();
-});
+  initializeCurrentPlayerDisplay();
+  initializePieceControls();
 
+  // Force refresh to hide all used pieces
+  hideAllUsedPieces();
+
+  // Refresh the game state
+  setTimeout(refreshGameState, 500);
+}
+
+// ==========================================
+// PIECE SELECTION AND BOARD INTERACTION
+// ==========================================
 /**
  * Initialize piece selection functionality
  */
 function initializePieceSelection() {
-  const selectablePieces = document.querySelectorAll(".game-piece.selectable");
+  // Use event delegation for piece selection
+  document.addEventListener("click", function (event) {
+    // Find closest .game-piece parent if the event target is inside a piece
+    const piece = event.target.closest(".game-piece.selectable");
 
-  selectablePieces.forEach((piece) => {
-    piece.addEventListener("click", function () {
-      // Remove selected class from all pieces
+    if (piece) {
+      // Remove selected class from all pieces and add to clicked piece
       document
         .querySelectorAll(".game-piece.selected")
         .forEach((p) => p.classList.remove("selected"));
-
-      // Add selected class to clicked piece
-      this.classList.add("selected");
+      piece.classList.add("selected");
 
       // Store selected piece
-      selectedPiece = this;
+      GameState.selectedPiece = piece;
 
       // Get piece data
-      const pieceId = this.getAttribute("data-piece-id");
-      const pieceColor = this.getAttribute("data-piece-color");
+      const pieceId = piece.getAttribute("data-piece-id");
+      const pieceColor = piece.getAttribute("data-piece-color");
 
-      // Set form values
+      // Set form values if they exist
       const selectedPieceIdElement = document.getElementById("selectedPieceId");
       const selectedPieceColorElement =
         document.getElementById("selectedPieceColor");
 
-      if (selectedPieceIdElement) {
-        selectedPieceIdElement.value = pieceId;
-      }
-
-      if (selectedPieceColorElement) {
+      if (selectedPieceIdElement) selectedPieceIdElement.value = pieceId;
+      if (selectedPieceColorElement)
         selectedPieceColorElement.value = pieceColor;
-      }
 
       // Show placement instructions
       showInstructions("Click on the board to place your piece");
-
-      console.log("Piece selected:", pieceId, "color:", pieceColor);
-    });
+    }
   });
 }
 
@@ -80,21 +126,20 @@ function initializeBoardHover() {
   const boardCells = document.querySelectorAll(".board-cell");
 
   boardCells.forEach((cell) => {
+    // Show preview when mouse enters a cell
     cell.addEventListener("mouseenter", function () {
-      if (!selectedPiece) return;
-
-      // Show placement preview
+      if (!GameState.selectedPiece) return;
       showPlacementPreview(this);
     });
 
+    // Remove preview when mouse leaves a cell
     cell.addEventListener("mouseleave", function () {
-      // Remove placement preview
       removePlacementPreview();
     });
 
     // Add click handler for piece placement
     cell.addEventListener("click", function () {
-      if (!selectedPiece) return;
+      if (!GameState.selectedPiece) return;
 
       const x = parseInt(this.getAttribute("data-x"));
       const y = parseInt(this.getAttribute("data-y"));
@@ -111,24 +156,24 @@ function initializeBoardHover() {
   });
 }
 
+// ==========================================
+// PIECE ORIENTATION AND VALIDATION
+// ==========================================
 /**
  * Fix the piece shape orientation to match the server's expected format
- * This corrects for the HTML template's transposition of rows and columns
  */
 function correctPieceOrientation(shape) {
-  // Create a new shape with the right dimensions
   const height = shape.length;
   const width = shape[0] ? shape[0].length : 0;
 
-  // Create an empty matrix with width and height swapped
+  // Create a transposed matrix
   const correctedShape = Array(width)
     .fill()
     .map(() => Array(height).fill(false));
 
-  // Fill in the values with transposed coordinates
+  // Fill with transposed values
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // Transpose coordinates: [y][x] becomes [x][y]
       correctedShape[x][y] = shape[y][x];
     }
   }
@@ -138,23 +183,17 @@ function correctPieceOrientation(shape) {
 
 /**
  * Check if the placement is valid according to Blokus rules
- * 1. First piece must be placed in a corner
- * 2. Subsequent pieces must touch at least one piece of the same color at corners
- * 3. Pieces can't touch pieces of the same color at edges
- * 4. Pieces can't overlap with existing pieces
  */
 function isValidPlacement(x, y) {
-  if (!selectedPiece) return false;
+  if (!GameState.selectedPiece) return false;
 
-  const pieceColor = selectedPiece.getAttribute("data-piece-color");
-  console.log(
-    `Checking placement validity for color ${pieceColor} at position (${x},${y})`
-  );
+  const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
 
-  // Get the piece shape - this extracts the shape as it appears in the DOM
-  const pieceElement = selectedPiece;
+  // Get the piece shape
+  const pieceElement = GameState.selectedPiece;
   const shape = [];
   const originalRows = pieceElement.querySelectorAll(".piece-row");
+
   originalRows.forEach((row) => {
     const rowCells = [];
     row.querySelectorAll(".piece-cell").forEach((cell) => {
@@ -165,27 +204,17 @@ function isValidPlacement(x, y) {
 
   // Fix the orientation to match server's expected format
   const processedShape = correctPieceOrientation(shape);
-
-  // Log the shape for debugging
-  console.log("Original shape:", shape);
-  console.log("Corrected shape for validation:", processedShape);
-
-  // Check if any cell in the shape would overlap with an existing piece
   const height = processedShape.length;
   const width = processedShape[0] ? processedShape[0].length : 0;
 
-  // Check for basic game start (first move must be in a corner)
-  const isFirstPiece =
-    document.querySelectorAll(".board-cell.occupied").length === 0;
-  console.log(`Is first piece placement: ${isFirstPiece}`);
+  // Check if first piece for this color
+  const isFirstPiece = isFirstPiecePlacement(pieceColor);
 
-  // Flag to track if the piece touches at least one piece of the same color at a corner
+  // Flags to track corner and edge touches
   let touchesCorner = false;
-
-  // Flag to track if the piece touches an edge of the same color (invalid)
   let touchesEdge = false;
 
-  // Keep track of corner positions for first piece check
+  // Corner positions for first piece check
   const cornerPositions = [
     { x: 0, y: 0 }, // Top-left
     { x: 0, y: 19 }, // Bottom-left
@@ -196,49 +225,45 @@ function isValidPlacement(x, y) {
   // Check each cell of the piece
   for (let dy = 0; dy < height; dy++) {
     for (let dx = 0; dx < width; dx++) {
-      if (!processedShape[dy][dx]) continue; // Skip empty cells in the piece shape
+      if (!processedShape[dy][dx]) continue; // Skip empty cells
 
       const boardX = x + dx;
       const boardY = y + dy;
 
       // Check if out of bounds
       if (boardX < 0 || boardX >= 20 || boardY < 0 || boardY >= 20) {
-        console.log(`Placement out of bounds at (${boardX},${boardY})`);
         return false;
       }
 
-      // Check if the cell is already occupied
+      // Check if cell is already occupied
       const targetCell = document.querySelector(
         `.board-cell[data-x="${boardX}"][data-y="${boardY}"]`
       );
       if (targetCell && targetCell.classList.contains("occupied")) {
-        console.log(`Cell already occupied at (${boardX},${boardY})`);
-        return false; // Can't place on an occupied cell
+        return false;
       }
 
-      // First piece check: see if any part of the piece covers a corner
+      // First piece check: must cover a corner
       if (isFirstPiece) {
         for (const corner of cornerPositions) {
           if (boardX === corner.x && boardY === corner.y) {
-            console.log(
-              `First piece touches corner at (${corner.x},${corner.y})`
-            );
             touchesCorner = true;
             break;
           }
         }
       } else {
         // For subsequent pieces, check adjacent cells and diagonals
-        // Check the 8 surrounding cells
         const adjacentCells = [
+          // Edge neighbors (invalid if same color)
           { x: boardX - 1, y: boardY, isEdge: true }, // Left
           { x: boardX + 1, y: boardY, isEdge: true }, // Right
           { x: boardX, y: boardY - 1, isEdge: true }, // Top
           { x: boardX, y: boardY + 1, isEdge: true }, // Bottom
-          { x: boardX - 1, y: boardY - 1, isEdge: false }, // Top-Left (corner)
-          { x: boardX + 1, y: boardY - 1, isEdge: false }, // Top-Right (corner)
-          { x: boardX - 1, y: boardY + 1, isEdge: false }, // Bottom-Left (corner)
-          { x: boardX + 1, y: boardY + 1, isEdge: false }, // Bottom-Right (corner)
+          // Corner neighbors (valid if same color)
+          { x: boardX - 1, y: boardY - 1, isEdge: false }, // Top-Left
+          { x: boardX + 1, y: boardY - 1, isEdge: false }, // Top-Right
+          { x: boardX - 1, y: boardY + 1, isEdge: false }, // Bottom-Left
+          { x: boardX + 1, y: boardY + 1, isEdge: false }, // Bottom-Right
         ];
 
         adjacentCells.forEach((adj) => {
@@ -247,19 +272,13 @@ function isValidPlacement(x, y) {
               `.board-cell[data-x="${adj.x}"][data-y="${adj.y}"]`
             );
             if (adjCell && adjCell.classList.contains("occupied")) {
-              // Check if it's the same color
+              // Check if same color
               const adjColor = adjCell.getAttribute("data-color");
               if (adjColor === pieceColor) {
                 if (adj.isEdge) {
-                  console.log(
-                    `Piece touches same color at edge (${adj.x},${adj.y})`
-                  );
-                  touchesEdge = true; // Touching same color at edge (invalid)
+                  touchesEdge = true; // Invalid - touching same color at edge
                 } else {
-                  console.log(
-                    `Piece touches same color at corner (${adj.x},${adj.y})`
-                  );
-                  touchesCorner = true; // Touching same color at corner (valid)
+                  touchesCorner = true; // Valid - touching same color at corner
                 }
               }
             }
@@ -269,26 +288,12 @@ function isValidPlacement(x, y) {
     }
   }
 
-  // For the first piece, it must touch a corner
+  // Return validation result based on piece placement rules
   if (isFirstPiece) {
-    const result = touchesCorner;
-    console.log(`First piece placement valid: ${result}`);
-    // For debugging purposes, add more information if it fails
-    if (!result) {
-      console.log(
-        "First piece must touch one of the corners: (0,0), (0,19), (19,0), or (19,19)"
-      );
-    }
-    return result;
+    return touchesCorner; // First piece must touch a board corner
+  } else {
+    return touchesCorner && !touchesEdge; // Must touch corner but not edges of same color
   }
-
-  // For subsequent pieces, must touch at least one same-color piece at a corner
-  // but not touch any same-color piece at an edge
-  const result = touchesCorner && !touchesEdge;
-  console.log(
-    `Subsequent piece placement valid: ${result} (touchesCorner: ${touchesCorner}, touchesEdge: ${touchesEdge})`
-  );
-  return result;
 }
 
 /**
@@ -298,21 +303,21 @@ function showPlacementPreview(cell) {
   // Remove any existing preview
   removePlacementPreview();
 
-  if (!selectedPiece) return;
+  if (!GameState.selectedPiece) return;
 
   // Get cell coordinates
   const x = parseInt(cell.getAttribute("data-x"));
   const y = parseInt(cell.getAttribute("data-y"));
 
   // Get the board cell size to ensure preview matches board scale
-  const cellSize = cell.offsetWidth; // Get the width of the board cell
+  const cellSize = cell.offsetWidth;
 
-  // Create the preview directly using the shape, not the visuals
-  const pieceColor = selectedPiece.getAttribute("data-piece-color");
+  // Create the preview
+  const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
 
-  // Get the piece shape - this extracts the shape as it appears in the DOM
+  // Get the piece shape
   const shape = [];
-  const originalRows = selectedPiece.querySelectorAll(".piece-row");
+  const originalRows = GameState.selectedPiece.querySelectorAll(".piece-row");
   originalRows.forEach((row) => {
     const rowCells = [];
     row.querySelectorAll(".piece-cell").forEach((cell) => {
@@ -321,32 +326,31 @@ function showPlacementPreview(cell) {
     shape.push(rowCells);
   });
 
-  // Fix the orientation to match server's expected format
+  // Fix the orientation
   const processedShape = correctPieceOrientation(shape);
 
-  // Create a new container for the preview that will match board scale
-  piecePreview = document.createElement("div");
-  piecePreview.className = "piece-preview";
-  piecePreview.style.position = "absolute";
-  piecePreview.style.pointerEvents = "none";
-  piecePreview.style.zIndex = "1000";
+  // Create preview container
+  GameState.piecePreview = document.createElement("div");
+  GameState.piecePreview.className = "piece-preview";
+  GameState.piecePreview.style.position = "absolute";
+  GameState.piecePreview.style.pointerEvents = "none";
+  GameState.piecePreview.style.zIndex = "1000";
 
-  // Get board position for proper alignment
+  // Position preview at cell location
   const cellRect = cell.getBoundingClientRect();
-  piecePreview.style.left = `${cellRect.left}px`;
-  piecePreview.style.top = `${cellRect.top}px`;
+  GameState.piecePreview.style.left = `${cellRect.left}px`;
+  GameState.piecePreview.style.top = `${cellRect.top}px`;
 
-  // Create a grid matching the piece shape at board scale
+  // Create grid structure for preview
   const height = processedShape.length;
   const width = processedShape[0] ? processedShape[0].length : 0;
 
-  // Create the overlay grid
   const previewGrid = document.createElement("div");
   previewGrid.style.display = "grid";
   previewGrid.style.gridTemplateColumns = `repeat(${width}, ${cellSize}px)`;
   previewGrid.style.gridTemplateRows = `repeat(${height}, ${cellSize}px)`;
 
-  // Create each cell in the preview
+  // Create cells in the preview
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
       const previewCell = document.createElement("div");
@@ -366,16 +370,16 @@ function showPlacementPreview(cell) {
     }
   }
 
-  piecePreview.appendChild(previewGrid);
-  document.body.appendChild(piecePreview);
+  GameState.piecePreview.appendChild(previewGrid);
+  document.body.appendChild(GameState.piecePreview);
 
-  // Check if placement is valid and set appropriate class
+  // Set appearance based on validity
   const isValid = isValidPlacement(x, y);
   if (isValid) {
-    piecePreview.classList.add("valid-placement");
+    GameState.piecePreview.classList.add("valid-placement");
   } else {
-    piecePreview.classList.add("invalid-placement");
-    piecePreview.style.opacity = "0.4"; // Make invalid placements more transparent
+    GameState.piecePreview.classList.add("invalid-placement");
+    GameState.piecePreview.style.opacity = "0.4";
   }
 }
 
@@ -383,9 +387,9 @@ function showPlacementPreview(cell) {
  * Remove placement preview
  */
 function removePlacementPreview() {
-  if (piecePreview) {
-    piecePreview.remove();
-    piecePreview = null;
+  if (GameState.piecePreview) {
+    GameState.piecePreview.remove();
+    GameState.piecePreview = null;
   }
 }
 
@@ -393,31 +397,33 @@ function removePlacementPreview() {
  * Handle piece placement
  */
 function placePiece(x, y) {
-  if (!selectedPiece) {
-    console.error("No piece selected for placement");
+  if (!GameState.selectedPiece) {
     showMessage("Please select a piece first.");
     return;
   }
 
-  console.log("Placing piece at:", x, y);
-
   // Get piece details
-  const pieceId = selectedPiece.getAttribute("data-piece-id");
-  const pieceColor = selectedPiece.getAttribute("data-piece-color");
+  const pieceId = GameState.selectedPiece.getAttribute("data-piece-id");
+  const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
 
   if (!pieceId || !pieceColor) {
-    console.error("Piece data is missing:", { pieceId, pieceColor });
     showMessage("Error: Piece information is incomplete.");
     return;
   }
 
-  console.log("Piece details:", {
-    id: pieceId,
-    color: pieceColor,
-  });
-
   // Show waiting message
   showInstructions("Placing piece... please wait");
+
+  // Immediately mark the piece as used in the UI to prevent double clicks
+  GameState.selectedPiece.classList.add("used");
+  GameState.selectedPiece.classList.remove("selectable");
+  GameState.selectedPiece.style.display = "none";
+
+  // Disable all pieces during the server request
+  document.querySelectorAll(".game-piece.selectable").forEach((piece) => {
+    piece.classList.remove("selectable");
+    piece.classList.add("disabled");
+  });
 
   // Prepare the form data
   const formData = new FormData();
@@ -425,10 +431,10 @@ function placePiece(x, y) {
   formData.append("y", y);
   formData.append("rotation", 0); // Always 0
   formData.append("flipped", false); // Always false
-  formData.append("pieceId", pieceId); // Add piece ID directly to request
-  formData.append("pieceColor", pieceColor); // Add piece color directly to request
+  formData.append("pieceId", pieceId);
+  formData.append("pieceColor", pieceColor);
 
-  // Get the CSRF token if Spring Security is enabled
+  // Get CSRF token if Spring Security is enabled
   const csrfToken = document
     .querySelector("meta[name='_csrf']")
     ?.getAttribute("content");
@@ -436,23 +442,18 @@ function placePiece(x, y) {
     .querySelector("meta[name='_csrf_header']")
     ?.getAttribute("content");
 
-  // Keep reference to selected piece for later use in case it becomes null during async operation
-  const currentSelectedPiece = selectedPiece;
+  // Show the piece on the board immediately for better UX
+  addPieceToBoard(pieceId, pieceColor, x, y);
 
-  console.log(
-    `Sending place-piece request to /games/${gameId}/place-piece with:`,
-    {
-      x,
-      y,
-      pieceId,
-      pieceColor,
-      rotation: 0,
-      flipped: false,
-    }
-  );
+  // Clear the selection
+  GameState.selectedPiece = null;
+  document
+    .querySelectorAll(".game-piece.selected")
+    .forEach((p) => p.classList.remove("selected"));
+  showInstructions("Waiting for other players...");
 
-  // Send the request via fetch instead of form submission
-  fetch(`/games/${gameId}/place-piece`, {
+  // Send the placement request to the server
+  fetch(`/games/${GameState.gameId}/api/place-piece`, {
     method: "POST",
     body: formData,
     headers: {
@@ -462,202 +463,59 @@ function placePiece(x, y) {
     credentials: "same-origin",
   })
     .then((response) => {
-      console.log("Place piece response status:", response.status);
-
       if (response.redirected) {
-        // If the server indicates a redirect, follow it
         window.location.href = response.url;
         return;
       }
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        return response.text().then((text) => {
+          try {
+            const errorJson = JSON.parse(text);
+            throw new Error(
+              errorJson.error || `Server error: ${response.status}`
+            );
+          } catch (jsonError) {
+            throw new Error(text || `Server error: ${response.status}`);
+          }
+        });
       }
 
-      // Successful placement - update the UI without reloading
-      console.log("Piece placed successfully");
+      // Set a fallback timeout in case WebSocket update doesn't arrive
+      const wsUpdateTimeout = setTimeout(() => {
+        refreshGameState();
+      }, 2000);
 
-      // Mark the piece as used in the inventory (if available)
-      if (currentSelectedPiece && currentSelectedPiece.classList) {
-        currentSelectedPiece.classList.add("used");
-      } else {
-        // If selectedPiece is null, try to find it by ID and color
-        console.log(
-          "Selected piece not available, trying to find it in the DOM"
-        );
-        const pieceToMark = document.querySelector(
-          `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
-        );
-        if (pieceToMark) {
-          pieceToMark.classList.add("used");
-        }
-      }
-
-      // Add the piece to the board immediately
-      addPieceToBoard(pieceId, pieceColor, x, y);
-
-      // Clear the selection
-      selectedPiece = null;
-      showInstructions("Select a piece from your available pieces");
-      document
-        .querySelectorAll(".game-piece.selected")
-        .forEach((p) => p.classList.remove("selected"));
-
+      window.lastWsUpdateTimeout = wsUpdateTimeout;
       return response.text();
     })
     .catch((error) => {
-      console.error("Error placing piece:", error);
       showMessage("Error placing piece: " + error.message);
       showInstructions("Something went wrong. Please try again.");
+
+      // Re-enable pieces in case of error
+      updatePieceSelectionState(true);
     });
-}
-
-/**
- * Initialize WebSocket connection
- */
-function initializeWebSocket() {
-  if (!gameId) return;
-
-  // Connect directly since scripts are now loaded in the HTML
-  connectWebSocket();
-}
-
-/**
- * Connect to WebSocket
- */
-function connectWebSocket() {
-  console.log("Attempting to connect to WebSocket...");
-
-  try {
-    const socket = new SockJS("/ws-blokus");
-    console.log("SockJS instance created");
-
-    stompClient = Stomp.over(socket);
-    console.log("STOMP client created");
-
-    // Debug mode for STOMP client
-    stompClient.debug = function (str) {
-      console.log("STOMP Debug:", str);
-    };
-
-    console.log("Connecting to STOMP...");
-    stompClient.connect(
-      {},
-      function (frame) {
-        console.log("Connected to WebSocket: " + frame);
-
-        // Subscribe to game updates
-        const subscription = "/topic/games/" + gameId;
-        console.log("Subscribing to:", subscription);
-
-        stompClient.subscribe(subscription, function (message) {
-          console.log("Received WebSocket message:", message);
-          try {
-            const parsedData = JSON.parse(message.body);
-            handleGameUpdate(parsedData);
-          } catch (e) {
-            console.error("Error parsing WebSocket message:", e);
-          }
-        });
-
-        console.log("WebSocket setup complete");
-      },
-      function (error) {
-        console.error("WebSocket connection error:", error);
-        // Reconnect after a delay
-        setTimeout(connectWebSocket, 5000);
-      }
-    );
-  } catch (e) {
-    console.error("Exception in WebSocket setup:", e);
-  }
-}
-
-/**
- * Handle game updates received via WebSocket
- */
-function handleGameUpdate(update) {
-  console.log("Received game update:", update);
-
-  switch (update.type) {
-    case "PIECE_PLACED":
-      // Only apply updates from other players, since we already see our own moves
-      const currentUserName = document
-        .querySelector(".current-user")
-        ?.getAttribute("data-username");
-      if (update.data.playerUsername !== currentUserName) {
-        handlePiecePlaced(update.data);
-      }
-      break;
-    case "NEXT_TURN":
-      handleNextTurn(update.data);
-      break;
-    case "GAME_OVER":
-      handleGameOver(update.data);
-      break;
-    default:
-      console.log("Unknown update type:", update.type);
-  }
-
-  // Show update message
-  showMessage(update.message);
-}
-
-/**
- * Handle a piece placed update
- */
-function handlePiecePlaced(data) {
-  // Mark the piece as used in the inventory
-  const pieceElements = document.querySelectorAll(
-    `.game-piece[data-piece-id="${data.pieceId}"][data-piece-color="${data.pieceColor}"]`
-  );
-  pieceElements.forEach((piece) => {
-    piece.classList.add("used");
-  });
-
-  // Add the piece to the board (ignore rotation and flip values)
-  addPieceToBoard(data.pieceId, data.pieceColor, data.x, data.y);
-
-  console.log(
-    `Piece ${data.pieceId} placed by ${data.playerUsername} at (${data.x},${data.y})`
-  );
 }
 
 /**
  * Add a piece to the board
  */
 function addPieceToBoard(pieceId, pieceColor, x, y) {
-  console.log(`Adding piece ${pieceId} to board at (${x},${y})`);
+  if (!pieceId || !pieceColor || x === undefined || y === undefined) {
+    return;
+  }
 
-  try {
-    // Find the piece shape
-    const pieceElement = document.querySelector(
-      `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
-    );
+  // Find the piece by ID to get its shape
+  const targetPieceElement = document.querySelector(
+    `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
+  );
 
-    if (!pieceElement) {
-      console.warn(
-        `Could not find piece with id ${pieceId} and color ${pieceColor}. Creating a fallback piece.`
-      );
-      // Create a basic square piece as fallback
-      applyBasicPiece(x, y, pieceColor);
-      return;
-    }
-
-    // Find the target cell
-    const targetCell = document.querySelector(
-      `.board-cell[data-x="${x}"][data-y="${y}"]`
-    );
-
-    if (!targetCell) {
-      console.error(`Could not find cell at coordinates (${x},${y})`);
-      return;
-    }
-
-    // Get the piece shape from the original piece
+  if (targetPieceElement) {
+    // Extract the shape from the DOM
     const shape = [];
-    const originalRows = pieceElement.querySelectorAll(".piece-row");
-    originalRows.forEach((row) => {
+    const rows = targetPieceElement.querySelectorAll(".piece-row");
+    rows.forEach((row) => {
       const rowCells = [];
       row.querySelectorAll(".piece-cell").forEach((cell) => {
         rowCells.push(cell.classList.contains(`${pieceColor}`));
@@ -665,66 +523,80 @@ function addPieceToBoard(pieceId, pieceColor, x, y) {
       shape.push(rowCells);
     });
 
-    console.log("Original piece shape:", shape);
+    const pieceShape = correctPieceOrientation(shape);
+    applyShapeToBoard(pieceShape, x, y, pieceColor, pieceId);
+  } else {
+    // Fallback if piece element not found
+    applyBasicPiece(x, y, pieceColor, pieceId);
+  }
 
-    // Fix the orientation to match server's expected format
-    const processedShape = correctPieceOrientation(shape);
-    console.log("Corrected piece shape:", processedShape);
-
-    // Apply the shape to the board
-    applyShapeToBoard(processedShape, x, y, pieceColor);
-
-    console.log(
-      `Piece ${pieceId} (${pieceColor}) successfully placed at (${x},${y})`
-    );
-  } catch (error) {
-    console.error("Error adding piece to board:", error);
-    // Try to place a fallback piece at least
-    applyBasicPiece(x, y, pieceColor);
+  // Track that this piece is used
+  GameState.usedPieceIds.add(pieceId);
+  if (GameState.usedPieceByColor[pieceColor]) {
+    GameState.usedPieceByColor[pieceColor].add(pieceId);
   }
 }
 
 /**
- * Apply a basic piece (1x1) to the board as a fallback
+ * Applies a basic piece (single cell) at the specified coordinates
  */
-function applyBasicPiece(x, y, color) {
-  // Find the cell at the given coordinates
+function applyBasicPiece(x, y, color, pieceId) {
+  // Make sure coordinates are numbers
+  x = parseInt(x);
+  y = parseInt(y);
+
+  // Find the target cell
   const cell = document.querySelector(
     `.board-cell[data-x="${x}"][data-y="${y}"]`
   );
+  if (!cell) return;
 
-  if (cell) {
-    // Mark the cell as occupied
-    cell.classList.add("occupied");
-    cell.classList.add(color);
-    console.log(`Applied fallback piece at (${x},${y}) with color ${color}`);
+  // Set properties on the cell
+  cell.style.backgroundColor = color.toLowerCase();
+  cell.classList.add("occupied");
+
+  // Use monomino pieceId (1) for single-cell pieces if needed
+  if (pieceId !== "1" && (!pieceId || pieceId.length === 0)) {
+    pieceId = "1";
+  }
+
+  // Store data attributes
+  if (pieceId) cell.setAttribute("data-piece-id", pieceId);
+  cell.setAttribute("data-color", color.toLowerCase());
+
+  // Ensure this piece is tracked
+  if (color && GameState.usedPieceByColor[color.toLowerCase()]) {
+    GameState.usedPieceByColor[color.toLowerCase()].add(pieceId);
   }
 }
 
 /**
- * Apply a shape to the board starting from the specified coordinates
+ * Applies a piece shape to the board starting at the specified coordinates
  */
-function applyShapeToBoard(shape, startX, startY, color) {
-  const height = shape.length;
-  const width = shape[0] ? shape[0].length : 0;
+function applyShapeToBoard(shape, startX, startY, color, pieceId) {
+  // Make sure coordinates are numbers
+  startX = parseInt(startX);
+  startY = parseInt(startY);
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < shape.length; y++) {
+    for (let x = 0; x < shape[y].length; x++) {
+      // If this cell in the shape is filled
       if (shape[y][x]) {
+        // Calculate board coordinates
         const boardX = startX + x;
         const boardY = startY + y;
 
-        // Find the cell at these coordinates
+        // Get the corresponding cell on the board
         const cell = document.querySelector(
           `.board-cell[data-x="${boardX}"][data-y="${boardY}"]`
         );
 
+        // If cell exists, set its properties
         if (cell) {
-          cell.style.backgroundColor = color;
+          cell.style.backgroundColor = color.toLowerCase();
           cell.classList.add("occupied");
-
-          // Store the color on the cell as a data attribute for validation
-          cell.setAttribute("data-color", color);
+          cell.setAttribute("data-piece-id", pieceId);
+          cell.setAttribute("data-color", color.toLowerCase());
         }
       }
     }
@@ -732,24 +604,197 @@ function applyShapeToBoard(shape, startX, startY, color) {
 }
 
 /**
- * Handle a next turn update
+ * Check if it's the first piece for this color
  */
-function handleNextTurn(data) {
-  // Update the current player display
-  const currentPlayerSpan = document.querySelector(".game-info span");
-  if (currentPlayerSpan) {
-    currentPlayerSpan.textContent = data.nextPlayerUsername;
+function isFirstPiecePlacement(color) {
+  // Look for pieces with this color on the board
+  const colorPieces = document.querySelectorAll(
+    `.board-cell.occupied[data-color="${color}"]`
+  );
+  return colorPieces.length === 0;
+}
 
-    // Check if it's the current user's turn
-    const currentUser = document
-      .querySelector(".current-user")
-      ?.getAttribute("data-username");
-    if (currentUser === data.nextPlayerUsername) {
-      currentPlayerSpan.classList.add("current-player-active");
-    } else {
-      currentPlayerSpan.classList.remove("current-player-active");
-    }
+// ==========================================
+// WEBSOCKET AND SERVER COMMUNICATION
+// ==========================================
+
+/**
+ * Initialize WebSocket connection
+ */
+function initializeWebSocket() {
+  if (!GameState.gameId) {
+    return;
   }
+
+  const socket = new SockJS("/ws-blokus");
+  GameState.stompClient = Stomp.over(socket);
+
+  // Turn off debug logging
+  GameState.stompClient.debug = null;
+
+  GameState.stompClient.connect(
+    {},
+    function (frame) {
+      // Subscribe to game updates
+      GameState.stompClient.subscribe(
+        `/topic/games/${GameState.gameId}`,
+        function (message) {
+          try {
+            const gameUpdate = JSON.parse(message.body);
+
+            // Handle different types of updates
+            switch (gameUpdate.type) {
+              case "GAME_STATE":
+                handleGameStateUpdate(gameUpdate);
+                break;
+              case "NEXT_TURN":
+                handleNextTurn(gameUpdate);
+                break;
+              case "PIECE_PLACED":
+                handlePiecePlacement(gameUpdate);
+                break;
+              case "GAME_OVER":
+                handleGameOver(gameUpdate.data);
+                break;
+              default:
+                break;
+            }
+          } catch (error) {
+            console.error("Error handling WebSocket message:", error);
+          }
+        }
+      );
+
+      // Send a connection message
+      GameState.stompClient.send(
+        `/app/games/${GameState.gameId}/connect`,
+        {},
+        JSON.stringify({
+          type: "CONNECT",
+          gameId: GameState.gameId,
+        })
+      );
+    },
+    function (error) {
+      // Connection error handler
+      showMessage("Connection lost. Reconnecting in 5 seconds...");
+
+      // Try to reconnect after a delay
+      setTimeout(initializeWebSocket, 5000);
+    }
+  );
+}
+
+/**
+ * Handle a game state update from the server
+ */
+function handleGameStateUpdate(gameUpdate) {
+  // Update the board if provided
+  if (gameUpdate.board) {
+    updateBoard(gameUpdate.board);
+  }
+
+  // Update current player
+  if (gameUpdate.currentPlayer) {
+    updateCurrentPlayer(gameUpdate.currentPlayer);
+  }
+
+  // Update piece availability
+  if (gameUpdate.availablePieces) {
+    updateAvailablePieces(gameUpdate.availablePieces);
+  }
+
+  // Update game status
+  if (gameUpdate.gameStatus) {
+    updateGameStatus(gameUpdate.gameStatus);
+  }
+}
+
+/**
+ * Handle a next turn update from the server
+ */
+function handleNextTurn(turnUpdate) {
+  // Clear any pending WebSocket update timeout
+  if (window.lastWsUpdateTimeout) {
+    clearTimeout(window.lastWsUpdateTimeout);
+    window.lastWsUpdateTimeout = null;
+  }
+
+  // Extract next player information
+  const nextPlayerUsername = turnUpdate.data.nextPlayerUsername;
+
+  // Update current player display
+  const currentPlayerSpan = document.getElementById("current-player");
+  if (currentPlayerSpan) {
+    currentPlayerSpan.textContent = nextPlayerUsername;
+    currentPlayerSpan.classList.remove("current-player-active");
+
+    if (nextPlayerUsername === GameState.currentUsername) {
+      // It's the current user's turn
+      currentPlayerSpan.classList.add("current-player-active");
+      showMessage("It's your turn!");
+      updatePieceSelectionState(true);
+    } else if (nextPlayerUsername.startsWith("Bot ")) {
+      // It's a bot's turn
+      showMessage("Bot is making a move...");
+      updatePieceSelectionState(false);
+
+      // For bot turns, refresh game state after a short delay
+      setTimeout(() => {
+        refreshGameState();
+      }, 1000);
+    } else {
+      // It's another human player's turn
+      showMessage("It's " + nextPlayerUsername + "'s turn");
+      updatePieceSelectionState(false);
+    }
+
+    // Hide used pieces
+    hideAllUsedPieces();
+  }
+}
+
+/**
+ * Handle a piece placement update from the server
+ */
+function handlePiecePlacement(placementUpdate) {
+  // Clear any pending WebSocket update timeout
+  if (window.lastWsUpdateTimeout) {
+    clearTimeout(window.lastWsUpdateTimeout);
+    window.lastWsUpdateTimeout = null;
+  }
+
+  // Extract placement data
+  const data = placementUpdate.data;
+  const isBot = data.username && data.username.toLowerCase().includes("bot");
+
+  // Add the piece to the board
+  addPieceToBoard(data.pieceId, data.pieceColor, data.x, data.y);
+
+  // Track that this piece has been used
+  GameState.usedPieceIds.add(data.pieceId);
+  if (data.pieceColor && GameState.usedPieceByColor[data.pieceColor]) {
+    GameState.usedPieceByColor[data.pieceColor].add(data.pieceId);
+  }
+
+  // Hide the corresponding piece in the player's box
+  const pieceElements = document.querySelectorAll(
+    `.game-piece[data-piece-id="${data.pieceId}"][data-piece-color="${data.pieceColor}"]`
+  );
+
+  pieceElements.forEach((pieceElement) => {
+    pieceElement.classList.add("used");
+    pieceElement.classList.remove("selectable");
+    pieceElement.style.display = "none";
+  });
+
+  // For bot moves, ensure the correct piece ID is on the board
+  if (isBot) {
+    ensureCorrectPieceIdOnBoard(data.pieceId, data.pieceColor, data.x, data.y);
+  }
+
+  // Refresh the UI to ensure all pieces are properly hidden
+  hideAllUsedPieces();
 }
 
 /**
@@ -767,39 +812,701 @@ function handleGameOver(data) {
     }
 
     scoresHtml += "</ul>";
-
     gameStatus.innerHTML = scoresHtml;
   }
 }
 
 /**
+ * Refresh the game state from the server
+ */
+function refreshGameState() {
+  if (!GameState.gameId) {
+    return;
+  }
+
+  fetch(`/games/${GameState.gameId}/api/state`)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((gameState) => {
+      // Reset tracking data
+      GameState.usedPieceIds.clear();
+      Object.keys(GameState.usedPieceByColor).forEach((color) => {
+        GameState.usedPieceByColor[color].clear();
+      });
+
+      // Update game components based on server data
+      if (gameState.currentPlayer) {
+        updateCurrentPlayer(gameState.currentPlayer);
+      }
+
+      if (gameState.board) {
+        updateBoard(gameState.board);
+      }
+
+      // Validate and fix board piece IDs
+      validateAndFixBoardPieceIds();
+
+      // Update available pieces
+      if (gameState.availablePieces) {
+        updateAvailablePieces(gameState.availablePieces);
+      }
+
+      // Update game status
+      if (gameState.status) {
+        updateGameStatus(gameState.status);
+      }
+
+      // Update player data
+      if (gameState.players) {
+        updatePlayers(gameState.players);
+      }
+
+      // Finally, hide used pieces
+      hideAllUsedPieces();
+
+      // Run an additional check after a short delay
+      setTimeout(() => {
+        validateAndFixBoardPieceIds();
+        updateHiddenPiecesBasedOnBoard();
+      }, 300);
+    })
+    .catch((error) => {
+      console.error("Error refreshing game state:", error);
+    });
+}
+
+// ==========================================
+// UI AND DISPLAY FUNCTIONS
+// ==========================================
+
+/**
  * Show a message
  */
 function showMessage(message) {
-  // Create or update a message element
-  let messageElement = document.querySelector(".game-message");
-
+  const messageElement = document.querySelector(".game-message");
   if (!messageElement) {
-    messageElement = document.createElement("div");
-    messageElement.className = "game-message";
-    document.querySelector(".game-container").appendChild(messageElement);
+    // Create message element if it doesn't exist
+    const newMessageElement = document.createElement("div");
+    newMessageElement.className = "game-message";
+    document.body.appendChild(newMessageElement);
+
+    // Use the newly created element
+    newMessageElement.textContent = message;
+    newMessageElement.style.display = "block";
+
+    // Hide after 3 seconds
+    setTimeout(() => {
+      newMessageElement.style.display = "none";
+    }, 3000);
+  } else {
+    // Use existing message element
+    messageElement.textContent = message;
+    messageElement.style.display = "block";
+
+    // Hide after 3 seconds
+    setTimeout(() => {
+      messageElement.style.display = "none";
+    }, 3000);
   }
-
-  messageElement.textContent = message;
-  messageElement.style.display = "block";
-
-  // Hide the message after a delay
-  setTimeout(() => {
-    messageElement.style.display = "none";
-  }, 5000);
 }
 
 /**
- * Show game instructions to the user based on current state
+ * Show game instructions to the user
  */
 function showInstructions(message) {
   const instructionsElement = document.querySelector(".game-instructions");
   if (instructionsElement) {
     instructionsElement.textContent = message;
   }
+}
+
+/**
+ * Initialize the current player display
+ */
+function initializeCurrentPlayerDisplay() {
+  // Get the current player element
+  const currentPlayerSpan = document.querySelector(".game-info span");
+  if (!currentPlayerSpan) return;
+
+  const playerName = currentPlayerSpan.textContent.trim();
+
+  // Try to get the current user's username if not already set
+  if (!GameState.currentUsername) {
+    const currentUserElement = document.querySelector(".current-user");
+    if (currentUserElement) {
+      GameState.currentUsername =
+        currentUserElement.getAttribute("data-username");
+    }
+  }
+
+  // Check if it's the current user's turn
+  if (GameState.currentUsername && playerName === GameState.currentUsername) {
+    currentPlayerSpan.classList.add("current-player-active");
+    showMessage("It's your turn!");
+  } else if (playerName.startsWith("Bot ")) {
+    showMessage(playerName + " is making a move...");
+  } else {
+    showMessage("It's " + playerName + "'s turn");
+  }
+
+  // Update piece selection state
+  updatePieceSelectionState(true);
+}
+
+/**
+ * Update piece selection state based on whose turn it is
+ */
+function updatePieceSelectionState(enable) {
+  // Get all player areas
+  const playerAreas = document.querySelectorAll(".player-area");
+
+  // If currentUsername is not set, try to get it
+  if (!GameState.currentUsername) {
+    const currentUserElement = document.querySelector(".current-user");
+    if (currentUserElement) {
+      GameState.currentUsername =
+        currentUserElement.getAttribute("data-username");
+    }
+  }
+
+  // If still no username, look for active player
+  if (!GameState.currentUsername) {
+    const activePlayer = document.querySelector(".current-player-active");
+    if (activePlayer) {
+      GameState.currentUsername = activePlayer.textContent.trim();
+    }
+  }
+
+  playerAreas.forEach((area) => {
+    // Get player info from the area
+    const playerInfo = area.querySelector(".player-info");
+    if (!playerInfo) return;
+
+    const playerName = playerInfo.textContent.trim();
+
+    // Special case: If this is the only non-bot player and we don't have a username,
+    // assume this is the current user
+    if (
+      !GameState.currentUsername &&
+      playerName &&
+      !playerName.includes("Bot")
+    ) {
+      GameState.currentUsername = playerName;
+    }
+
+    const isCurrentUserArea = playerName === GameState.currentUsername;
+
+    // Find all unused pieces in this area
+    const unusedPieces = area.querySelectorAll(".game-piece:not(.used)");
+
+    // If forced enable, or it's the current user's turn
+    const shouldEnable = enable || isCurrentUserArea;
+
+    unusedPieces.forEach((piece) => {
+      if (shouldEnable) {
+        // Enable selection for pieces
+        piece.classList.add("selectable");
+        piece.classList.remove("disabled");
+      } else {
+        // Disable selection for pieces
+        piece.classList.remove("selectable");
+        piece.classList.add("disabled");
+      }
+    });
+  });
+
+  // Try to force pieces to be selectable for the current player
+  if (GameState.currentUsername) {
+    document.querySelectorAll(".player-info").forEach((info) => {
+      if (info.textContent.trim() === GameState.currentUsername) {
+        const playerArea = info.closest(".player-area");
+        if (playerArea) {
+          const pieces = playerArea.querySelectorAll(".game-piece:not(.used)");
+          pieces.forEach((piece) => {
+            piece.classList.add("selectable");
+            piece.classList.remove("disabled");
+          });
+        }
+      }
+    });
+  }
+}
+
+/**
+ * Update the board based on server data
+ */
+function updateBoard(boardData) {
+  boardData.forEach((cell) => {
+    const { x, y, color, pieceId } = cell;
+    if (color) {
+      let cellElement = document.querySelector(
+        `.board-cell[data-x="${x}"][data-y="${y}"]`
+      );
+      if (!cellElement) return;
+
+      // Set the cell color and mark as occupied
+      cellElement.style.backgroundColor = color.toLowerCase();
+      cellElement.classList.add("occupied");
+      cellElement.setAttribute("data-piece-id", pieceId);
+      cellElement.setAttribute("data-color", color.toLowerCase());
+    }
+  });
+}
+
+/**
+ * Update current player information
+ */
+function updateCurrentPlayer(playerData) {
+  const currentPlayerSpan = document.getElementById("current-player");
+  if (!currentPlayerSpan) return;
+
+  currentPlayerSpan.textContent = playerData.username;
+  currentPlayerSpan.style.color = playerData.color.toLowerCase();
+}
+
+/**
+ * Update available pieces based on server data
+ */
+function updateAvailablePieces(availablePieces) {
+  Object.entries(availablePieces).forEach(([playerColor, pieces]) => {
+    pieces.forEach((pieceId) => {
+      // Find pieces that match this ID and color
+      const pieceElements = document.querySelectorAll(
+        `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${playerColor}"]`
+      );
+
+      // Mark them as available
+      pieceElements.forEach((pieceElement) => {
+        pieceElement.classList.remove("used");
+      });
+    });
+  });
+}
+
+/**
+ * Update game status (e.g., game over)
+ */
+function updateGameStatus(gameStatus) {
+  if (gameStatus === "GAME_OVER") {
+    showMessage("Game Over!");
+
+    // Disable all piece selection
+    updatePieceSelectionState(false);
+  }
+}
+
+/**
+ * Update player information based on server data
+ */
+function updatePlayers(players) {
+  players.forEach((player) => {
+    const { username, color, usedPieces, score } = player;
+    const isBot = username && username.toLowerCase().includes("bot");
+
+    // Find the player area for this player
+    const playerInfoElements = document.querySelectorAll(".player-info");
+    playerInfoElements.forEach((element) => {
+      if (element.textContent.trim() === username) {
+        const playerArea = element.closest(".player-area");
+        if (!playerArea) return;
+
+        // Update score if available
+        if (score !== undefined) {
+          const scoreElement = playerArea.querySelector(".player-score");
+          if (scoreElement) {
+            scoreElement.textContent = `Score: ${score}`;
+          }
+        }
+
+        // For bots, only track pieces that are on the board
+        if (isBot) {
+          // We let the board scanning functions handle bot pieces
+          return;
+        }
+
+        // For human players, mark used pieces from server data
+        if (usedPieces && usedPieces.length > 0 && color) {
+          usedPieces.forEach((pieceId) => {
+            // Find piece by ID and color in this player's area
+            const pieceElement = playerArea.querySelector(
+              `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${color}"]`
+            );
+
+            if (pieceElement) {
+              pieceElement.classList.add("used");
+              pieceElement.classList.remove("selectable");
+              pieceElement.style.display = "none";
+
+              // Track in global state
+              GameState.usedPieceIds.add(pieceId);
+              if (GameState.usedPieceByColor[color]) {
+                GameState.usedPieceByColor[color].add(pieceId);
+              }
+            }
+          });
+        }
+      }
+    });
+  });
+}
+
+// ==========================================
+// BOARD STATE VALIDATION AND CORRECTION
+// ==========================================
+
+/**
+ * Ensure that the correct piece ID from the server is set on board cells
+ */
+function ensureCorrectPieceIdOnBoard(pieceId, pieceColor, startX, startY) {
+  const cell = document.querySelector(
+    `.board-cell[data-x="${startX}"][data-y="${startY}"]`
+  );
+
+  if (!cell || cell.getAttribute("data-color") !== pieceColor) return;
+
+  // Use flood fill algorithm to find connected cells of same color
+  const cellsToProcess = [cell];
+  const processedCells = new Set();
+
+  while (cellsToProcess.length > 0) {
+    const currentCell = cellsToProcess.pop();
+    const cellX = parseInt(currentCell.getAttribute("data-x"));
+    const cellY = parseInt(currentCell.getAttribute("data-y"));
+    const cellKey = `${cellX},${cellY}`;
+
+    // Skip if already processed
+    if (processedCells.has(cellKey)) continue;
+
+    // Mark as processed
+    processedCells.add(cellKey);
+
+    // Set the correct piece ID
+    if (currentCell.getAttribute("data-piece-id") !== pieceId) {
+      currentCell.setAttribute("data-piece-id", pieceId);
+    }
+
+    // Check adjacent cells (4-connected neighborhood)
+    const adjacentPositions = [
+      { x: cellX + 1, y: cellY }, // right
+      { x: cellX - 1, y: cellY }, // left
+      { x: cellX, y: cellY + 1 }, // down
+      { x: cellX, y: cellY - 1 }, // up
+    ];
+
+    for (const pos of adjacentPositions) {
+      const adjacentCell = document.querySelector(
+        `.board-cell[data-x="${pos.x}"][data-y="${pos.y}"]`
+      );
+
+      if (
+        adjacentCell &&
+        adjacentCell.getAttribute("data-color") === pieceColor &&
+        adjacentCell.classList.contains("occupied") &&
+        !processedCells.has(`${pos.x},${pos.y}`)
+      ) {
+        cellsToProcess.push(adjacentCell);
+      }
+    }
+  }
+}
+
+/**
+ * Validate and fix board piece IDs to match what was actually placed
+ */
+function validateAndFixBoardPieceIds() {
+  // Get all occupied cells on the board
+  const occupiedCells = document.querySelectorAll(".board-cell.occupied");
+
+  // Create a map to track pieces by color
+  const boardPiecesByColor = {
+    red: new Set(),
+    green: new Set(),
+    blue: new Set(),
+    yellow: new Set(),
+  };
+
+  // Process each cell to build the map
+  occupiedCells.forEach((cell) => {
+    const pieceId = cell.getAttribute("data-piece-id");
+    const pieceColor = cell.getAttribute("data-color");
+
+    if (pieceId && pieceColor && boardPiecesByColor[pieceColor]) {
+      boardPiecesByColor[pieceColor].add(pieceId);
+    }
+  });
+
+  // Validate piece groups for consistency
+  const pieceGroups = new Map();
+  occupiedCells.forEach((cell) => {
+    const pieceId = cell.getAttribute("data-piece-id");
+    const pieceColor = cell.getAttribute("data-color");
+    const x = parseInt(cell.getAttribute("data-x"));
+    const y = parseInt(cell.getAttribute("data-y"));
+
+    if (pieceId && pieceColor) {
+      const key = `${pieceColor}-${pieceId}`;
+      if (!pieceGroups.has(key)) {
+        pieceGroups.set(key, []);
+      }
+      pieceGroups.get(key).push({ cell, x, y });
+    }
+  });
+
+  // Fix monominos (single cell pieces should have ID 1)
+  pieceGroups.forEach((cells, key) => {
+    const [color, pieceId] = key.split("-");
+
+    // For pieces with just 1 cell, it must be piece ID 1 (the monomino)
+    if (cells.length === 1) {
+      const cell = cells[0].cell;
+
+      // If this is a single cell and it's not marked as piece 1, fix it
+      if (pieceId !== "1") {
+        cell.setAttribute("data-piece-id", "1");
+
+        // Update tracking data structures
+        if (GameState.usedPieceByColor[color]) {
+          GameState.usedPieceByColor[color].delete(pieceId);
+          GameState.usedPieceByColor[color].add("1");
+
+          // Also update boardPiecesByColor
+          if (boardPiecesByColor[color]) {
+            boardPiecesByColor[color].delete(pieceId);
+            boardPiecesByColor[color].add("1");
+          }
+        }
+      }
+
+      // Ensure monomino is properly tracked
+      if (pieceId === "1" || cell.getAttribute("data-piece-id") === "1") {
+        GameState.usedPieceIds.add("1");
+        if (GameState.usedPieceByColor[color]) {
+          GameState.usedPieceByColor[color].add("1");
+        }
+      }
+    }
+  });
+
+  // Sync board state with tracking data
+  Object.keys(GameState.usedPieceByColor).forEach((color) => {
+    const boardPieces = boardPiecesByColor[color] || new Set();
+    const trackedPieces = GameState.usedPieceByColor[color] || new Set();
+
+    // Add pieces on board but not in tracking
+    boardPieces.forEach((pieceId) => {
+      if (!trackedPieces.has(pieceId)) {
+        GameState.usedPieceByColor[color].add(pieceId);
+      }
+    });
+
+    // For bot colors, remove pieces in tracking but not on board
+    if (color === "red" || color === "green") {
+      trackedPieces.forEach((pieceId) => {
+        if (
+          !boardPieces.has(pieceId) &&
+          !pieceOnBoard(pieceId, color) &&
+          pieceId !== "1"
+        ) {
+          GameState.usedPieceByColor[color].delete(pieceId);
+        }
+      });
+    }
+  });
+
+  // Ensure all pieces on the board are hidden in player areas
+  updateHiddenPiecesBasedOnBoard();
+}
+
+/**
+ * Checks if a piece is actually on the board
+ */
+function pieceOnBoard(pieceId, color) {
+  const cells = document.querySelectorAll(
+    `.board-cell.occupied[data-piece-id="${pieceId}"][data-color="${color}"]`
+  );
+  return cells.length > 0;
+}
+
+/**
+ * Update hidden pieces in player areas based on what's on the board
+ */
+function updateHiddenPiecesBasedOnBoard() {
+  // Create a map to track pieces on board by color
+  const piecesOnBoardByColor = {
+    red: new Set(),
+    green: new Set(),
+    blue: new Set(),
+    yellow: new Set(),
+  };
+
+  // Find all pieces on the board
+  const occupiedCells = document.querySelectorAll(".board-cell.occupied");
+  occupiedCells.forEach((cell) => {
+    const pieceId = cell.getAttribute("data-piece-id");
+    const pieceColor = cell.getAttribute("data-color");
+
+    if (pieceId && pieceColor && piecesOnBoardByColor[pieceColor]) {
+      piecesOnBoardByColor[pieceColor].add(pieceId);
+    }
+  });
+
+  // Go through each player area and hide pieces that are on the board
+  const playerAreas = document.querySelectorAll(".player-area");
+  playerAreas.forEach((area) => {
+    const playerInfo = area.querySelector(".player-info");
+    if (!playerInfo) return;
+
+    const playerName = playerInfo.textContent.trim();
+    const playerPieces = area.querySelector(".player-pieces");
+    if (!playerPieces) return;
+
+    const playerColor = playerPieces.getAttribute("data-player-color");
+    if (!playerColor) return;
+
+    // Get pieces that should be hidden for this color
+    const piecesToHide = piecesOnBoardByColor[playerColor] || new Set();
+
+    // Find pieces in this player's area
+    const pieces = area.querySelectorAll(".game-piece");
+
+    // Check each piece
+    pieces.forEach((piece) => {
+      const pieceId = piece.getAttribute("data-piece-id");
+      const pieceColor = piece.getAttribute("data-piece-color");
+
+      // Skip pieces that don't match this player's color
+      if (!pieceId || !pieceColor || pieceColor !== playerColor) return;
+
+      // Check if this piece should be hidden
+      if (piecesToHide.has(pieceId)) {
+        piece.classList.add("used");
+        piece.classList.remove("selectable");
+        piece.style.display = "none";
+      }
+    });
+  });
+}
+
+/**
+ * Combined function to hide used pieces across all player areas
+ */
+function hideAllUsedPieces() {
+  // Get all occupied cells on the board
+  const occupiedCells = document.querySelectorAll(".board-cell.occupied");
+
+  // Track pieces on board by color
+  const piecesOnBoardByColor = {
+    blue: new Set(),
+    yellow: new Set(),
+    red: new Set(),
+    green: new Set(),
+  };
+
+  // Find all unique pieces on the board
+  occupiedCells.forEach((cell) => {
+    const pieceId = cell.getAttribute("data-piece-id");
+    const pieceColor = cell.getAttribute("data-color");
+
+    if (pieceId && pieceColor && piecesOnBoardByColor[pieceColor]) {
+      piecesOnBoardByColor[pieceColor].add(pieceId);
+    }
+  });
+
+  // Process each player area
+  const playerAreas = document.querySelectorAll(".player-area");
+
+  playerAreas.forEach((area) => {
+    const playerInfo = area.querySelector(".player-info");
+    if (!playerInfo) return;
+
+    const playerName = playerInfo.textContent.trim();
+    const playerPieces = area.querySelector(".player-pieces");
+    if (!playerPieces) return;
+
+    const playerColor = playerPieces.getAttribute("data-player-color");
+    const isBot = playerName.toLowerCase().includes("bot");
+
+    // Get pieces that should be hidden
+    const piecesOnBoard = piecesOnBoardByColor[playerColor] || new Set();
+    const trackedPieces = GameState.usedPieceByColor[playerColor] || new Set();
+
+    // For bots only use what's on board, for humans use combined data
+    const piecesToHide = isBot
+      ? new Set([...piecesOnBoard])
+      : new Set([...piecesOnBoard, ...trackedPieces]);
+
+    // Hide each piece
+    area.querySelectorAll(".game-piece").forEach((piece) => {
+      const pieceId = piece.getAttribute("data-piece-id");
+      const pieceColor = piece.getAttribute("data-piece-color");
+
+      // Skip pieces that don't match this player's color
+      if (!pieceId || !pieceColor || pieceColor !== playerColor) return;
+
+      // Hide piece if it should be hidden
+      if (piecesToHide.has(pieceId)) {
+        piece.classList.add("used");
+        piece.classList.remove("selectable");
+        piece.style.display = "none";
+      }
+    });
+  });
+}
+
+// ==========================================
+// PIECE CONTROLS
+// ==========================================
+
+/**
+ * Initialize piece controls (rotate, flip)
+ */
+function initializePieceControls() {
+  // Get control elements
+  const rotateLeftButton = document.getElementById("rotate-left");
+  const rotateRightButton = document.getElementById("rotate-right");
+  const flipButton = document.getElementById("flip");
+
+  // Add rotation and flip functionality
+  if (rotateLeftButton) {
+    rotateLeftButton.addEventListener("click", function () {
+      // Implement rotation later if needed
+    });
+  }
+
+  if (rotateRightButton) {
+    rotateRightButton.addEventListener("click", function () {
+      // Implement rotation later if needed
+    });
+  }
+
+  if (flipButton) {
+    flipButton.addEventListener("click", function () {
+      // Implement flip later if needed
+    });
+  }
+
+  // Add keyboard controls
+  document.addEventListener("keydown", function (event) {
+    if (!GameState.selectedPiece) return;
+
+    // Left arrow for rotate left
+    if (event.key === "ArrowLeft") {
+      // Implement rotation later if needed
+      event.preventDefault();
+    }
+    // Right arrow for rotate right
+    else if (event.key === "ArrowRight") {
+      // Implement rotation later if needed
+      event.preventDefault();
+    }
+    // F for flip
+    else if (event.key === "f" || event.key === "F") {
+      // Implement flip later if needed
+      event.preventDefault();
+    }
+  });
 }
