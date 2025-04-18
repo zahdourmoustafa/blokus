@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Blokus Game</title>
+    <link rel="stylesheet" th:href="@{/css/game.css}" />
+    <!-- CSRF tokens for AJAX requests -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta
+      name="_csrf_header"
+      th:content="${_csrf != null ? _csrf.headerName : ''}"
+    />
+  </head>
+  <body>
+    <div class="game-container">
+      <!-- Blue Player (Top Left) -->
+      <div class="player-area player-area-top">
+        <div
+          class="player-info"
+          th:text="${participants != null && participants.size() > 0 ? 
+                    (participants[0].isBot() ? 'Bot Blue' : 
+                    (participants[0].user != null ? participants[0].user.username : 'Blue Player')) : 'Blue Player'}"
+          th:classappend="${participants != null && participants.size() > 0 && participants[0].isBot() ? 'bot-player' : ''}"
+        >
+          Blue Player
+        </div>
+        <div class="player-pieces" data-player-color="blue">
+          <!-- Blue Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.blue}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='blue'"
+            th:classappend="${(participants != null && participants.size() > 0 && 
+                             ((participants[0].isBot()) || (participants[0].user != null && participants[0].user.id == currentUser.id))) 
+                             ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'blue' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Board -->
+      <div class="game-board-container">
+        <table class="game-board">
+          <tbody>
+            <!-- Generate 20 rows -->
+            <tr th:each="row : ${#numbers.sequence(0, 19)}">
+              <!-- Generate 20 cells per row -->
+              <td
+                class="board-cell"
+                th:each="col : ${#numbers.sequence(0, 19)}"
+                th:attr="data-x=${col}, data-y=${row}"
+                th:onclick="${selectedPieceId != null} ? 'placePiece(' + ${col} + ', ' + ${row} + ');' : ''"
+              ></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Yellow/Orange Player (Top Right) -->
+      <div class="player-area player-area-right">
+        <div
+          class="player-info"
+          th:text="${participants != null && participants.size() > 3 ? 
+                    (participants[3].isBot() ? 'Bot Yellow' : 
+                    (participants[3].user != null ? participants[3].user.username : 'Yellow Player')) : 'Yellow Player'}"
+          th:classappend="${participants != null && participants.size() > 3 && participants[3].isBot() ? 'bot-player' : ''}"
+        >
+          Yellow Player
+        </div>
+        <div class="player-pieces" data-player-color="yellow">
+          <!-- Yellow Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.yellow}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='yellow'"
+            th:classappend="${(participants != null && participants.size() > 3 && 
+                            ((participants[3].isBot()) || (participants[3].user != null && participants[3].user.id == currentUser.id))) 
+                            ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'yellow' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Red Player (Bottom Left) -->
+      <div class="player-area player-area-left">
+        <div
+          class="player-info"
+          th:text="${participants != null && participants.size() > 2 ? 
+                    (participants[2].isBot() ? 'Bot Red' : 
+                    (participants[2].user != null ? participants[2].user.username : 'Red Player')) : 'Red Player'}"
+          th:classappend="${participants != null && participants.size() > 2 && participants[2].isBot() ? 'bot-player' : ''}"
+        >
+          Red Player
+        </div>
+        <div class="player-pieces" data-player-color="red">
+          <!-- Red Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.red}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='red'"
+            th:classappend="${(participants != null && participants.size() > 2 && 
+                            ((participants[2].isBot()) || (participants[2].user != null && participants[2].user.id == currentUser.id))) 
+                            ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'red' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Green Player (Bottom Right) -->
+      <div class="player-area player-area-bottom">
+        <div
+          class="player-info"
+          th:text="${participants != null && participants.size() > 1 ? 
+                    (participants[1].isBot() ? 'Bot Green' : 
+                    (participants[1].user != null ? participants[1].user.username : 'Green Player')) : 'Green Player'}"
+          th:classappend="${participants != null && participants.size() > 1 && participants[1].isBot() ? 'bot-player' : ''}"
+        >
+          Green Player
+        </div>
+        <div class="player-pieces" data-player-color="green">
+          <!-- Green Player Pieces -->
+          <div
+            th:each="piece : ${playerPieces.green}"
+            class="game-piece"
+            th:attr="data-piece-id=${piece.id}, data-piece-color='green'"
+            th:classappend="${(participants != null && participants.size() > 1 && 
+                            ((participants[1].isBot()) || (participants[1].user != null && participants[1].user.id == currentUser.id))) 
+                            ? 'selectable' : 'disabled'}"
+            th:style="${placedPieces != null && placedPieces.contains(piece.id.toString())} ? 'display: none;' : ''"
+          >
+            <div class="piece-container">
+              <div
+                th:each="col : ${#numbers.sequence(0, piece.width - 1)}"
+                class="piece-row"
+              >
+                <div
+                  th:each="row : ${#numbers.sequence(0, piece.height - 1)}"
+                  class="piece-cell"
+                  th:classappend="${piece.shape[row][col] ? 'green' : ''}"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Player Info -->
+      <div class="game-info">
+        <h3>
+          Current Player:
+          <span
+            id="current-player"
+            th:if="${game.getCurrentPlayer() != null}"
+            th:text="${game.getCurrentPlayer().isBot() ? 
+                     'Bot ' + #strings.capitalize(#strings.toLowerCase(game.getCurrentPlayer().getColor().name())) : 
+                     (game.getCurrentPlayer().user != null ? game.getCurrentPlayer().user.username : 'Unknown')}"
+            th:class="${game.getCurrentPlayer().user != null && game.getCurrentPlayer().user.id == currentUser.id ? 'current-player-active' : ''}"
+          >
+          </span>
+        </h3>
+      </div>
+    </div>
+
+    <!-- Current User Information (Hidden) -->
+    <div
+      class="current-user"
+      style="display: none"
+      th:attr="data-username=${currentUser.username},
+                  data-id=${currentUser.id}"
+    ></div>
+
+    <!-- Game Status and Messages -->
+    <div class="game-status">
+      <span th:if="${game.status.name() == 'WAITING'}"
+        >Waiting for players to join...</span
+      >
+      <span th:if="${game.status.name() == 'PLAYING'}">Game in progress</span>
+      <span th:if="${game.status.name() == 'FINISHED'}">Game completed</span>
+    </div>
+
+    <!-- Game message notifications -->
+    <div class="game-message" style="display: none"></div>
+
+    <!-- Piece Controls - Moved outside the game board container -->
+    <div id="piece-controls" class="piece-controls">
+      <button id="rotate-left" class="control-button">Rotate Left</button>
+      <button id="rotate-right" class="control-button">Rotate Right</button>
+      <button id="flip" class="control-button">Flip</button>
+      <p class="control-help">
+        Keyboard: Left/Right arrows to rotate, F to flip
+      </p>
+    </div>
+
+    <div
+      th:if="${errorMessage}"
+      class="error-message"
+      th:text="${errorMessage}"
+    ></div>
+
+    <!-- Game Instructions -->
+    <div class="game-instructions" th:if="${selectedPieceId == null}">
+      <p>Select a piece from your available pieces</p>
+    </div>
+    <div class="game-instructions" th:if="${selectedPieceId != null}">
+      <p>
+        Rotate/flip the piece with the controls, then click on the board to
+        place it
+      </p>
+    </div>
+
+    <!-- Debugging tools -->
+    <div
+      class="debug-controls"
+      style="margin-top: 20px; text-align: center; display: block"
+    >
+      <button
+        onclick="enableCurrentPlayerPieces()"
+        style="
+          padding: 10px;
+          background-color: #007bff;
+          color: white;
+          border: none;
+          cursor: pointer;
+        "
+      >
+        Enable My Pieces
+      </button>
+    </div>
+
+    <!-- Forms for server-side actions -->
+    <form
+      id="piece-selection-form"
+      method="post"
+      th:action="@{/games/{gameId}/select-piece(gameId=${game.id})}"
+    >
+      <input type="hidden" id="selectedPieceId" name="pieceId" value="" />
+      <input type="hidden" id="selectedPieceColor" name="pieceColor" value="" />
+    </form>
+
+    <form
+      id="place-piece-form"
+      method="post"
+      th:action="@{/games/{gameId}/place-piece(gameId=${game.id})}"
+      th:if="${selectedPieceId != null}"
+    >
+      <input type="hidden" id="selectedX" name="x" value="" />
+      <input type="hidden" id="selectedY" name="y" value="" />
+      <input
+        type="hidden"
+        id="pieceRotation"
+        name="rotation"
+        th:value="${pieceRotation != null ? pieceRotation : 0}"
+      />
+      <input
+        type="hidden"
+        id="pieceFlipped"
+        name="flipped"
+        th:value="${pieceFlipped != null ? pieceFlipped : false}"
+      />
+    </form>
+
+    <!-- WebSocket libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+    <!-- Include JavaScript -->
+    <script th:src="@{/js/game.js}"></script>
+  </body>
+</html>

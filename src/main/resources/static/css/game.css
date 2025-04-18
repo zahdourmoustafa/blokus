@@ -1,0 +1,580 @@
+/* Reset previous styles */
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #8b5a2b; /* Wood-like background */
+}
+
+.game-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 20px auto;
+  background-color: #c0a080; /* Wood-like background */
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 260px 1fr 260px; /* Fixed width columns */
+  grid-template-rows: auto auto 1fr 1fr; /* More symmetrical rows */
+  grid-template-areas:
+    "controls controls controls"
+    "info info info"
+    "blue-player board orange-player"
+    "green-player board purple-player";
+  gap: 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Game Controls Bar */
+.game-controls-bar {
+  grid-area: controls;
+  background-color: #4682b4; /* Steel Blue */
+  color: white;
+  padding: 5px 10px;
+  text-align: center;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Game Info Bar */
+.game-info-bar {
+  grid-area: info;
+  background-color: #6495ed; /* Cornflower Blue */
+  color: white;
+  padding: 8px;
+  text-align: center;
+  font-weight: bold;
+  border-radius: 4px;
+  margin-bottom: 5px;
+}
+
+/* Game board */
+.game-board-container {
+  grid-area: board;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+  min-height: 700px; /* Ensure board has enough height */
+}
+
+.game-board {
+  border-collapse: collapse;
+  background-color: #ffffff;
+  width: 98%;
+  height: 98%;
+  margin: auto;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.board-cell {
+  width: 25px;
+  height: 25px;
+  border: 1px solid #d3d3d3;
+  background-color: #f8f8f8;
+}
+
+/* Player areas */
+.player-area {
+  padding: 8px;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  width: 250px; /* Fixed width for all player areas */
+  height: 350px; /* Fixed height for all player areas */
+  box-sizing: border-box;
+  margin: 0; /* Remove any margin */
+}
+
+/* Blue player (Top Left) */
+.player-area-top {
+  grid-area: blue-player;
+  background-color: #add8e6; /* Light Blue */
+  border: 2px solid #0000ff;
+  align-self: start; /* Align to top */
+  justify-self: start; /* Align to left */
+}
+
+/* Green player (Bottom Left) */
+.player-area-left {
+  grid-area: green-player;
+  background-color: #ffb6b6; /* Light Red */
+  border: 2px solid #ff0000; /* Red */
+  align-self: end; /* Align to bottom */
+  justify-self: start; /* Align to left */
+}
+
+/* Orange/Yellow player (Top Right) */
+.player-area-right {
+  grid-area: orange-player;
+  background-color: #fffacd; /* Lemon Chiffon */
+  border: 2px solid #ffd700; /* Gold */
+  align-self: start; /* Align to top */
+  justify-self: end; /* Align to right */
+}
+
+/* Purple player (Bottom Right) */
+.player-area-bottom {
+  grid-area: purple-player;
+  background-color: #90ee90; /* Light Green */
+  border: 2px solid #008000; /* Green */
+  align-self: end; /* Align to bottom */
+  justify-self: end; /* Align to right */
+}
+
+.player-info {
+  font-weight: bold;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.player-pieces {
+  flex-grow: 1;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  padding: 8px;
+  overflow: auto;
+  min-height: 270px; /* Ensure consistent height for piece area */
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+}
+
+.player-controls {
+  margin-top: 5px;
+  text-align: center;
+}
+
+.player-controls button {
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+/* Corner markers */
+td[data-x="0"][data-y="0"] {
+  /* Top-left (Blue's corner) */
+  background-color: rgba(0, 0, 255, 0.3);
+}
+td[data-x="19"][data-y="0"] {
+  /* Top-right (Yellow's corner) */
+  background-color: rgba(255, 215, 0, 0.3); /* Yellow */
+}
+td[data-x="0"][data-y="19"] {
+  /* Bottom-left (Red's corner) */
+  background-color: rgba(255, 0, 0, 0.3);
+}
+td[data-x="19"][data-y="19"] {
+  /* Bottom-right (Green's corner) */
+  background-color: rgba(0, 128, 0, 0.3);
+}
+
+/* Game control buttons */
+.control-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.control-button {
+  padding: 2px 8px;
+  margin: 0 2px;
+  background-color: #3a6d99;
+  border: 1px solid #295685;
+  color: white;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.game-progress {
+  display: flex;
+  align-items: center;
+}
+
+.game-timer {
+  margin-left: 15px;
+}
+
+/* Media queries for responsive design */
+@media (max-width: 1000px) {
+  .game-container {
+    grid-template-columns: 200px 1fr 200px;
+  }
+}
+
+@media (max-width: 800px) {
+  .game-container {
+    grid-template-columns: 150px 1fr 150px;
+  }
+}
+
+/* Progress indicators for game */
+.progress-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.turn-count {
+  font-weight: bold;
+}
+
+/* Game Piece Styles */
+.game-piece {
+  display: inline-block;
+  margin: 3px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.game-piece:hover {
+  transform: scale(1.05);
+}
+
+.game-piece.selected {
+  transform: scale(1.1);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.game-piece.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.game-piece.disabled:hover {
+  transform: none;
+}
+
+.game-piece.selectable {
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.game-piece.selectable:hover {
+  border: 2px solid #333;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+}
+
+.piece-container {
+  display: inline-flex;
+}
+
+.piece-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.piece-cell {
+  width: 25px; /* Match the board cell size */
+  height: 25px; /* Match the board cell size */
+  box-sizing: border-box;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Piece color variations */
+.piece-cell.blue {
+  background-color: #0000ff;
+}
+
+.piece-cell.green {
+  background-color: #008000;
+}
+
+.piece-cell.red {
+  background-color: #ff0000;
+}
+
+.piece-cell.yellow {
+  background-color: #ffd700;
+}
+
+/* Game information styles */
+.game-info {
+  grid-area: info;
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  background-color: #f8f8f8;
+  padding: 8px;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.current-player-active {
+  font-weight: bold;
+  color: #008800;
+}
+
+.error-message {
+  color: #cc0000;
+  background-color: #ffeeee;
+  padding: 10px;
+  margin: 10px auto;
+  max-width: 500px;
+  text-align: center;
+  border-radius: 5px;
+  border: 1px solid #cc0000;
+}
+
+/* Styles for selectable board cells */
+.board-cell.selectable-cell {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.board-cell.selectable-cell:hover {
+  background-color: rgba(0, 255, 0, 0.2);
+  box-shadow: inset 0 0 6px rgba(0, 200, 0, 0.6);
+}
+
+/* Game instructions */
+.game-instructions {
+  margin: 15px auto;
+  text-align: center;
+  padding: 8px;
+  background-color: #f0f8ff;
+  border-radius: 5px;
+  max-width: 500px;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+/* Piece transformation styles */
+.piece-container {
+  transition: transform 0.3s ease;
+  transform-origin: center;
+}
+
+/* Selected piece highlighting */
+.game-piece.selected .piece-container {
+  box-shadow: 0 0 10px 3px #ffeb3b;
+}
+
+/* Piece controls styling */
+.piece-controls {
+  display: block;
+  margin: 15px auto;
+  text-align: center;
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+}
+
+.control-button {
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 16px;
+  margin: 0 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.control-button:hover {
+  background-color: #1976d2;
+}
+
+.control-button:active {
+  background-color: #0d47a1;
+}
+
+/* Piece preview styling */
+.piece-preview {
+  opacity: 0.7;
+  z-index: 100;
+  pointer-events: none;
+  transition: box-shadow 0.3s ease;
+}
+
+.piece-preview.valid-placement {
+  opacity: 0.8;
+  box-shadow: 0 0 15px 5px rgba(76, 175, 80, 0.7);
+  border: 2px dashed #4caf50;
+  border-radius: 4px;
+}
+
+.piece-preview.invalid-placement {
+  opacity: 0.6;
+  box-shadow: 0 0 15px 5px rgba(244, 67, 54, 0.7);
+  border: 2px dashed #f44336;
+  border-radius: 4px;
+}
+
+/* Game instructions styling */
+.game-instructions {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+/* Game status message styling */
+.game-status {
+  background-color: #e3f2fd;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* Error message styling */
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+/* Placed piece styling */
+.placed-piece {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.board-cell.occupied {
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/* Make the piece cell colors match the board background */
+.placed-piece .piece-cell.blue {
+  background-color: transparent;
+}
+
+.placed-piece .piece-cell.green {
+  background-color: transparent;
+}
+
+.placed-piece .piece-cell.red {
+  background-color: transparent;
+}
+
+.placed-piece .piece-cell.yellow {
+  background-color: transparent;
+}
+
+/* Used (placed) pieces styling */
+.game-piece.used {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Game message styling */
+.game-message {
+  background-color: #f1f8e9;
+  color: #33691e;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: center;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: none;
+}
+
+/* Final scores styling */
+.final-scores {
+  list-style-type: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.final-scores li {
+  padding: 5px;
+  margin: 2px 0;
+  background-color: #f5f5f5;
+  border-radius: 3px;
+}
+
+/* Current player indicator */
+.current-player-active {
+  color: #4caf50;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* Control help text */
+.control-help {
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+}
+
+/* Bot player styling */
+.bot-player {
+  font-style: italic;
+  position: relative;
+  padding-left: 22px;
+}
+
+.bot-player::before {
+  content: "🤖";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+}
+
+/* Current player indicator when AI is playing */
+.game-info span[class=""] {
+  font-weight: bold;
+  color: #666;
+}
+
+/* Current Player Update Animation */
+@keyframes playerUpdate {
+  0% {
+    background-color: rgba(255, 255, 0, 0.5);
+  }
+  50% {
+    background-color: rgba(255, 255, 0, 0.8);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.player-update {
+  animation: playerUpdate 1.5s ease;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+/* Make the current player title more prominent */
+.game-info h3 {
+  font-size: 1.3em;
+  margin: 5px 0;
+  color: #333;
+}
+
+/* Make the player name more prominent */
+.game-info span {
+  font-size: 1.2em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.3s ease-in-out;
+}
