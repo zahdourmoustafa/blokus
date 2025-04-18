@@ -100,6 +100,7 @@ function initializePieceSelection() {
       // Store selected piece
       GameState.selectedPiece = piece;
 
+<<<<<<< HEAD
       // Reset rotation for new selection
       GameState.selectedRotation = 0;
       // Also reset the visual rotation
@@ -108,6 +109,8 @@ function initializePieceSelection() {
         container.style.transform = `rotate(0deg)`;
       }
 
+=======
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       // Get piece data
       const pieceId = piece.getAttribute("data-piece-id");
       const pieceColor = piece.getAttribute("data-piece-color");
@@ -190,6 +193,7 @@ function correctPieceOrientation(shape) {
 }
 
 /**
+<<<<<<< HEAD
  * Utility: Rotate a 2D array shape by 0, 90, 180, or 270 degrees clockwise
  */
 function rotateShape(shape, rotation) {
@@ -218,6 +222,20 @@ function getCurrentPieceShape() {
   const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
   const shape = [];
   const originalRows = GameState.selectedPiece.querySelectorAll(".piece-row");
+=======
+ * Check if the placement is valid according to Blokus rules
+ */
+function isValidPlacement(x, y) {
+  if (!GameState.selectedPiece) return false;
+
+  const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
+
+  // Get the piece shape
+  const pieceElement = GameState.selectedPiece;
+  const shape = [];
+  const originalRows = pieceElement.querySelectorAll(".piece-row");
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   originalRows.forEach((row) => {
     const rowCells = [];
     row.querySelectorAll(".piece-cell").forEach((cell) => {
@@ -225,6 +243,7 @@ function getCurrentPieceShape() {
     });
     shape.push(rowCells);
   });
+<<<<<<< HEAD
   // Fix orientation for server, then rotate
   const processedShape = correctPieceOrientation(shape);
   return rotateShape(processedShape, GameState.selectedRotation || 0);
@@ -238,6 +257,11 @@ function isValidPlacement(x, y) {
   const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
   const processedShape = getCurrentPieceShape();
   if (!processedShape) return false;
+=======
+
+  // Fix the orientation to match server's expected format
+  const processedShape = correctPieceOrientation(shape);
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   const height = processedShape.length;
   const width = processedShape[0] ? processedShape[0].length : 0;
 
@@ -348,7 +372,24 @@ function showPlacementPreview(cell) {
 
   // Create the preview
   const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
+<<<<<<< HEAD
   const processedShape = getCurrentPieceShape();
+=======
+
+  // Get the piece shape
+  const shape = [];
+  const originalRows = GameState.selectedPiece.querySelectorAll(".piece-row");
+  originalRows.forEach((row) => {
+    const rowCells = [];
+    row.querySelectorAll(".piece-cell").forEach((cell) => {
+      rowCells.push(cell.classList.contains(`${pieceColor}`));
+    });
+    shape.push(rowCells);
+  });
+
+  // Fix the orientation
+  const processedShape = correctPieceOrientation(shape);
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
 
   // Create preview container
   GameState.piecePreview = document.createElement("div");
@@ -450,8 +491,13 @@ function placePiece(x, y) {
   const formData = new FormData();
   formData.append("x", x);
   formData.append("y", y);
+<<<<<<< HEAD
   formData.append("rotation", GameState.selectedRotation || 0);
   formData.append("flipped", false); // Always false for now
+=======
+  formData.append("rotation", 0); // Always 0
+  formData.append("flipped", false); // Always false
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   formData.append("pieceId", pieceId);
   formData.append("pieceColor", pieceColor);
 
@@ -464,7 +510,11 @@ function placePiece(x, y) {
     ?.getAttribute("content");
 
   // Show the piece on the board immediately for better UX
+<<<<<<< HEAD
   addPieceToBoard(pieceId, pieceColor, x, y, GameState.selectedRotation || 0);
+=======
+  addPieceToBoard(pieceId, pieceColor, x, y);
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
 
   // Clear the selection
   GameState.selectedPiece = null;
@@ -520,6 +570,7 @@ function placePiece(x, y) {
 }
 
 /**
+<<<<<<< HEAD
  * Update addPieceToBoard to accept a rotation parameter
  */
 function addPieceToBoard(pieceId, pieceColor, x, y, rotation) {
@@ -542,6 +593,22 @@ function addPieceToBoard(pieceId, pieceColor, x, y, rotation) {
     `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
   );
   if (targetPieceElement) {
+=======
+ * Add a piece to the board
+ */
+function addPieceToBoard(pieceId, pieceColor, x, y) {
+  if (!pieceId || !pieceColor || x === undefined || y === undefined) {
+    return;
+  }
+
+  // Find the piece by ID to get its shape
+  const targetPieceElement = document.querySelector(
+    `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
+  );
+
+  if (targetPieceElement) {
+    // Extract the shape from the DOM
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
     const shape = [];
     const rows = targetPieceElement.querySelectorAll(".piece-row");
     rows.forEach((row) => {
@@ -551,6 +618,7 @@ function addPieceToBoard(pieceId, pieceColor, x, y, rotation) {
       });
       shape.push(rowCells);
     });
+<<<<<<< HEAD
     let processedShape = correctPieceOrientation(shape);
     processedShape = rotateShape(processedShape, useRotation);
     pieceShape = processedShape;
@@ -560,6 +628,16 @@ function addPieceToBoard(pieceId, pieceColor, x, y, rotation) {
   } else {
     applyBasicPiece(x, y, pieceColor, pieceId);
   }
+=======
+
+    const pieceShape = correctPieceOrientation(shape);
+    applyShapeToBoard(pieceShape, x, y, pieceColor, pieceId);
+  } else {
+    // Fallback if piece element not found
+    applyBasicPiece(x, y, pieceColor, pieceId);
+  }
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   // Track that this piece is used
   GameState.usedPieceIds.add(pieceId);
   if (GameState.usedPieceByColor[pieceColor]) {
@@ -793,29 +871,56 @@ function handlePiecePlacement(placementUpdate) {
     clearTimeout(window.lastWsUpdateTimeout);
     window.lastWsUpdateTimeout = null;
   }
+<<<<<<< HEAD
   // Extract placement data
   const data = placementUpdate.data;
   const isBot = data.username && data.username.toLowerCase().includes("bot");
   // Add the piece to the board using server rotation
   addPieceToBoard(data.pieceId, data.pieceColor, data.x, data.y, data.rotation);
+=======
+
+  // Extract placement data
+  const data = placementUpdate.data;
+  const isBot = data.username && data.username.toLowerCase().includes("bot");
+
+  // Add the piece to the board
+  addPieceToBoard(data.pieceId, data.pieceColor, data.x, data.y);
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   // Track that this piece has been used
   GameState.usedPieceIds.add(data.pieceId);
   if (data.pieceColor && GameState.usedPieceByColor[data.pieceColor]) {
     GameState.usedPieceByColor[data.pieceColor].add(data.pieceId);
   }
+<<<<<<< HEAD
+=======
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   // Hide the corresponding piece in the player's box
   const pieceElements = document.querySelectorAll(
     `.game-piece[data-piece-id="${data.pieceId}"][data-piece-color="${data.pieceColor}"]`
   );
+<<<<<<< HEAD
+=======
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   pieceElements.forEach((pieceElement) => {
     pieceElement.classList.add("used");
     pieceElement.classList.remove("selectable");
     pieceElement.style.display = "none";
   });
+<<<<<<< HEAD
+=======
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   // For bot moves, ensure the correct piece ID is on the board
   if (isBot) {
     ensureCorrectPieceIdOnBoard(data.pieceId, data.pieceColor, data.x, data.y);
   }
+<<<<<<< HEAD
+=======
+
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   // Refresh the UI to ensure all pieces are properly hidden
   hideAllUsedPieces();
 }
@@ -1064,9 +1169,24 @@ function updatePieceSelectionState(enable) {
  */
 function updateBoard(boardData) {
   boardData.forEach((cell) => {
+<<<<<<< HEAD
     const { x, y, color, pieceId, rotation } = cell;
     if (color) {
       addPieceToBoard(pieceId, color, x, y, rotation);
+=======
+    const { x, y, color, pieceId } = cell;
+    if (color) {
+      let cellElement = document.querySelector(
+        `.board-cell[data-x="${x}"][data-y="${y}"]`
+      );
+      if (!cellElement) return;
+
+      // Set the cell color and mark as occupied
+      cellElement.style.backgroundColor = color.toLowerCase();
+      cellElement.classList.add("occupied");
+      cellElement.setAttribute("data-piece-id", pieceId);
+      cellElement.setAttribute("data-color", color.toLowerCase());
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
     }
   });
 }
@@ -1484,6 +1604,7 @@ function initializePieceControls() {
   const rotateRightButton = document.getElementById("rotate-right");
   const flipButton = document.getElementById("flip");
 
+<<<<<<< HEAD
   // Helper to update the selected piece's visual rotation
   function updateSelectedPieceRotation() {
     if (GameState.selectedPiece) {
@@ -1502,14 +1623,24 @@ function initializePieceControls() {
       GameState.selectedRotation =
         (GameState.selectedRotation - 90 + 360) % 360;
       updateSelectedPieceRotation();
+=======
+  // Add rotation and flip functionality
+  if (rotateLeftButton) {
+    rotateLeftButton.addEventListener("click", function () {
+      // Implement rotation later if needed
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
     });
   }
 
   if (rotateRightButton) {
     rotateRightButton.addEventListener("click", function () {
+<<<<<<< HEAD
       if (!GameState.selectedPiece) return;
       GameState.selectedRotation = (GameState.selectedRotation + 90) % 360;
       updateSelectedPieceRotation();
+=======
+      // Implement rotation later if needed
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
     });
   }
 
@@ -1525,15 +1656,23 @@ function initializePieceControls() {
 
     // Left arrow for rotate left
     if (event.key === "ArrowLeft") {
+<<<<<<< HEAD
       GameState.selectedRotation =
         (GameState.selectedRotation - 90 + 360) % 360;
       updateSelectedPieceRotation();
+=======
+      // Implement rotation later if needed
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       event.preventDefault();
     }
     // Right arrow for rotate right
     else if (event.key === "ArrowRight") {
+<<<<<<< HEAD
       GameState.selectedRotation = (GameState.selectedRotation + 90) % 360;
       updateSelectedPieceRotation();
+=======
+      // Implement rotation later if needed
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       event.preventDefault();
     }
     // F for flip

@@ -221,7 +221,15 @@
     <div class="game-message" style="display: none"></div>
 
     <!-- Piece Controls - Moved outside the game board container -->
+<<<<<<< HEAD
     <div id="piece-controls" class="piece-controls">
+=======
+    <div
+      id="piece-controls"
+      class="piece-controls"
+      th:style="${selectedPieceId != null ? 'display: block;' : 'display: none;'}"
+    >
+>>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       <button id="rotate-left" class="control-button">Rotate Left</button>
       <button id="rotate-right" class="control-button">Rotate Right</button>
       <button id="flip" class="control-button">Flip</button>
