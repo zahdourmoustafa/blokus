@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ import com.blokus.blokus.model.PieceFactory;
 import com.blokus.blokus.repository.GameRepository;
 import com.blokus.blokus.repository.GameUserRepository;
 import com.blokus.blokus.service.GameLogicService;
+import com.blokus.blokus.service.GameWebSocketService;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -33,10 +35,12 @@ public class GameLogicServiceImpl implements GameLogicService {
     
     private final GameRepository gameRepository;
     private final GameUserRepository gameUserRepository;
+    private final GameWebSocketService gameWebSocketService;
 
-    public GameLogicServiceImpl(GameRepository gameRepository, GameUserRepository gameUserRepository) {
+    public GameLogicServiceImpl(GameRepository gameRepository, GameUserRepository gameUserRepository, GameWebSocketService gameWebSocketService) {
         this.gameRepository = gameRepository;
         this.gameUserRepository = gameUserRepository;
+        this.gameWebSocketService = gameWebSocketService;
     }
 
     @Override
@@ -122,47 +126,64 @@ public class GameLogicServiceImpl implements GameLogicService {
         
         System.out.println("CURRENT TURN: " + formatPlayerInfo(currentPlayer) + " with color " + currentColor);
         
-        // SIMPLE, DIRECT IMPLEMENTATION - less complex, less prone to errors
-        GameUser nextPlayer;
-        
-        // ENFORCED strict sequence with direct player references
-        // BLUE → YELLOW → GREEN → RED → BLUE
-        if (currentPlayer == null) {
-            System.out.println("No current player, defaulting to BLUE");
-            nextPlayer = bluePlayer;
-        } 
-        else if (currentColor == GameUser.PlayerColor.BLUE) {
-            System.out.println("Current player is BLUE, next is YELLOW");
-            nextPlayer = yellowPlayer;
-        } 
-        else if (currentColor == GameUser.PlayerColor.YELLOW) {
-            System.out.println("Current player is YELLOW, next is GREEN");
-            nextPlayer = greenPlayer;
-        } 
-        else if (currentColor == GameUser.PlayerColor.GREEN) {
-            System.out.println("Current player is GREEN, next is RED");
-            nextPlayer = redPlayer;
-        } 
-        else if (currentColor == GameUser.PlayerColor.RED) {
-            System.out.println("Current player is RED, next is BLUE");
-            nextPlayer = bluePlayer;
+        GameUser[] turnOrder = new GameUser[]{bluePlayer, yellowPlayer, greenPlayer, redPlayer};
+        int currentIndex = -1;
+        for (int i = 0; i < turnOrder.length; i++) {
+            if (turnOrder[i] != null && currentPlayer != null && turnOrder[i].equals(currentPlayer)) {
+                currentIndex = i;
+                break;
+            }
         }
-        else {
-            System.out.println("Unknown current color, defaulting to BLUE");
-            nextPlayer = bluePlayer;
+        int numPlayers = (int) java.util.Arrays.stream(turnOrder).filter(p -> p != null).count();
+        int checked = 0;
+        GameUser nextPlayer = null;
+        // Always start from the next player in turn order, not the current one
+        do {
+            currentIndex = (currentIndex + 1) % 4;
+            nextPlayer = turnOrder[currentIndex];
+            if (nextPlayer != null && canPlayerMove(nextPlayer, gameId)) {
+                break;
+            }
+            // If player cannot move, notify clients
+            if (nextPlayer != null) {
+                String playerName = nextPlayer.isBot() ? "Bot " + nextPlayer.getColor() : (nextPlayer.getUser() != null ? nextPlayer.getUser().getUsername() : "Unknown");
+                gameWebSocketService.sendPlayerSkippedUpdate(gameId, playerName);
+            }
+            checked++;
+        } while (checked < numPlayers);
+        if (checked == numPlayers) {
+            // No player can move, end the game
+            System.out.println("No player can move. Ending game and calculating scores.");
+            game.setStatus(GameStatus.FINISHED);
+            gameRepository.save(game);
+            calculateScores(gameId);
+            // Calculate scores and send game over update to clients
+            calculateScores(gameId);
+            // Find winner and build scores map
+            List<GameUser> allPlayersForScores = gameUserRepository.findByGameId(gameId);
+            String winnerUsername = null;
+            int maxScore = Integer.MIN_VALUE;
+            java.util.Map<String, Integer> scores = new java.util.HashMap<>();
+            for (GameUser player : allPlayersForScores) {
+                String username = player.isBot() ? ("Bot " + player.getColor()) : (player.getUser() != null ? player.getUser().getUsername() : "Unknown");
+                scores.put(username, player.getScore());
+                if (player.getScore() > maxScore) {
+                    maxScore = player.getScore();
+                    winnerUsername = username;
+                }
+            }
+            gameWebSocketService.sendGameOverUpdate(gameId, winnerUsername, scores);
+            return null;
         }
-        
-        // Sanity check to ensure we got a valid player
-        if (nextPlayer == null) {
-            throw new IllegalStateException("Next player is null after direct lookup, which should not happen");
-        }
-        
-        System.out.println("NEXT TURN: " + formatPlayerInfo(nextPlayer) + " with color " + nextPlayer.getColor());
-        System.out.println("==============================================================");
-        
-        // Always set the determined player as the current player, no more complex logic
+        // Set the determined player as the current player
         game.setCurrentPlayer(nextPlayer);
         gameRepository.save(game);
+        // Always send NEXT_TURN update if the game is still playing and nextPlayer is not null
+        if (nextPlayer != null && game.getStatus() == GameStatus.PLAYING) {
+            String nextPlayerName = nextPlayer.isBot() ? "Bot " + nextPlayer.getColor().name().toLowerCase()
+                : (nextPlayer.getUser() != null ? nextPlayer.getUser().getUsername() : "Unknown");
+            gameWebSocketService.sendNextTurnUpdate(gameId, nextPlayer.getColor().name().toLowerCase(), nextPlayerName);
+        }
         return nextPlayer;
     }
     
@@ -195,12 +216,39 @@ public class GameLogicServiceImpl implements GameLogicService {
             return false; // Only playing games can become over
         }
         
-        // Simplified Game Over Condition: 
-        // If no player can make a move (needs canPlayerMove re-implementation based on new rules)
-        // For now, let's assume game over if all players have passed consecutively (needs tracking)
-        // Or based on a round limit, etc.
-        // Placeholder: return false
-        return false; 
+        // Get all players in the game
+        List<GameUser> allPlayers = gameUserRepository.findByGameId(gameId);
+        
+        // Check if any player can still make a move
+        for (GameUser player : allPlayers) {
+            if (canPlayerMove(player, gameId)) {
+                // At least one player can still move, game is not over
+                return false;
+            }
+        }
+        
+        // No player can move, the game is over
+        System.out.println("GAME OVER DETECTED: No player can make any more legal moves!");
+        // Set the game status to FINISHED
+        game.setStatus(GameStatus.FINISHED);
+        gameRepository.save(game);
+        // Calculate scores and send game over update to clients
+        calculateScores(gameId);
+        // Find winner and build scores map
+        List<GameUser> allPlayersForScores = gameUserRepository.findByGameId(gameId);
+        String winnerUsername = null;
+        int maxScore = Integer.MIN_VALUE;
+        java.util.Map<String, Integer> scores = new java.util.HashMap<>();
+        for (GameUser player : allPlayersForScores) {
+            String username = player.isBot() ? ("Bot " + player.getColor()) : (player.getUser() != null ? player.getUser().getUsername() : "Unknown");
+            scores.put(username, player.getScore());
+            if (player.getScore() > maxScore) {
+                maxScore = player.getScore();
+                winnerUsername = username;
+            }
+        }
+        gameWebSocketService.sendGameOverUpdate(gameId, winnerUsername, scores);
+        return true;
     }
 
     @Override
@@ -210,21 +258,54 @@ public class GameLogicServiceImpl implements GameLogicService {
                 .orElseThrow(() -> new EntityNotFoundException("Game not found with id: " + gameId));
 
         if (game.getStatus() != GameStatus.FINISHED) {
-            // Optionally force game to finish first or throw error
             game.setStatus(GameStatus.FINISHED);
-            //log.warn("Calculating scores for a game that is not finished. Forcing status to FINISHED.");
         }
 
-        // Scoring logic needs to be re-implemented based on the new game rules (if any)
-        // Score might depend on turns taken, objectives met, etc.
+        // Get all placed pieces for this game
+        List<Map<String, Object>> placedPieces = getPlacedPieces(gameId);
+
         for (GameUser player : game.getPlayers()) {
-            int score = 0; 
-            // Placeholder: Assign a dummy score or implement new logic
-            // score = calculatePlayerScore(gameId, player); // Needs re-implementation
-            player.setScore(score); 
+            String color = player.getColor().toString();
+            // All possible pieces for this player
+            List<Piece> allPieces = PieceFactory.createPieces(color);
+            // Unplaced piece IDs
+            Set<String> availablePieceIds = player.getAvailablePieceIds();
+
+            // 1. Count unused squares
+            int unusedSquares = 0;
+            for (Piece piece : allPieces) {
+                if (availablePieceIds.contains(String.valueOf(piece.getId()))) {
+                    // Count number of squares in this piece
+                    boolean[][] shape = piece.getShape();
+                    for (boolean[] row : shape) {
+                        for (boolean cell : row) {
+                            if (cell) unusedSquares++;
+                        }
+                    }
+                }
+            }
+            int score = -unusedSquares;
+
+            // 2. Check if all pieces are placed
+            boolean allPlaced = availablePieceIds.isEmpty();
+            if (allPlaced) {
+                score += 15;
+                // 3. Check if last placed piece is the single-square (id==1)
+                // Find this player's placed pieces, sorted by placement order
+                List<Map<String, Object>> playerPlaced = placedPieces.stream()
+                        .filter(p -> color.equalsIgnoreCase((String)p.get("pieceColor")))
+                        .toList();
+                if (!playerPlaced.isEmpty()) {
+                    Map<String, Object> lastPlaced = playerPlaced.get(playerPlaced.size() - 1);
+                    String lastPieceId = (String) lastPlaced.get("pieceId");
+                    if ("1".equals(lastPieceId)) {
+                        score += 5;
+                    }
+                }
+            }
+            player.setScore(score);
             gameUserRepository.save(player);
         }
-        
         return gameRepository.save(game);
     }
 
@@ -263,6 +344,24 @@ public class GameLogicServiceImpl implements GameLogicService {
             // Validate parameters first - but allow null userId for AI players
             if (gameId == null || pieceId == null || pieceColor == null) {
                 System.out.println("ERROR: Missing required parameters gameId, pieceId, or pieceColor");
+                return false;
+            }
+            
+            if (pieceId.trim().isEmpty() || pieceColor.trim().isEmpty()) {
+                System.out.println("ERROR: pieceId or pieceColor is empty string");
+                return false;
+            }
+            
+            // Defensive: Validate rotation
+            if (rotation != null && rotation % 90 != 0) {
+                System.out.println("WARNING: rotation " + rotation + " is not a multiple of 90. Forcing to 0.");
+                rotation = 0;
+            }
+            
+            // Defensive: Validate color
+            List<String> validColors = List.of("blue", "green", "red", "yellow");
+            if (!validColors.contains(pieceColor.toLowerCase())) {
+                System.out.println("ERROR: Invalid pieceColor '" + pieceColor + "'. Valid colors: " + validColors);
                 return false;
             }
             
@@ -394,7 +493,6 @@ public class GameLogicServiceImpl implements GameLogicService {
                 System.out.println("First piece placed correctly at or touching designated corner");
             } else {
                 // For subsequent pieces, implement standard Blokus rules
-                // Pieces must touch at corners but not edges
                 System.out.println("This is a subsequent piece placement for color: " + pieceColor);
                 
                 // Check if the piece has valid diagonal connectivity to an existing piece of the same color
@@ -409,6 +507,54 @@ public class GameLogicServiceImpl implements GameLogicService {
             }
 
             System.out.println("All validations passed! Processing piece placement...");
+            
+            // --- BOARD OCCUPANCY CHECK: Ensure no overlap with existing pieces ---
+            // Build a 20x20 board and mark all occupied cells
+            boolean[][] boardOccupied = new boolean[20][20];
+            for (Map<String, Object> placed : placedPieces) {
+                String placedPieceId = (String) placed.get("pieceId");
+                String placedPieceColor = (String) placed.get("pieceColor");
+                int placedX = (int) placed.get("x");
+                int placedY = (int) placed.get("y");
+                Integer placedRotation = (Integer) placed.get("rotation");
+                Boolean placedFlipped = (Boolean) placed.get("flipped");
+                boolean[][] placedShape = getPieceShape(placedPieceId, placedPieceColor, placedRotation, placedFlipped);
+                if (placedShape == null) continue;
+                for (int py = 0; py < placedShape.length; py++) {
+                    for (int px = 0; px < placedShape[0].length; px++) {
+                        if (placedShape[py][px]) {
+                            int boardX = placedX + px;
+                            int boardY = placedY + py;
+                            if (boardX >= 0 && boardX < 20 && boardY >= 0 && boardY < 20) {
+                                boardOccupied[boardY][boardX] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            // Get the shape of the piece to be placed
+            boolean[][] newPieceShape = getPieceShape(pieceId, pieceColor, rotation, flipped);
+            if (newPieceShape == null) {
+                System.out.println("ERROR: Could not get shape for piece " + pieceId + " of color " + pieceColor);
+                return false;
+            }
+            // Check for overlap
+            for (int py = 0; py < newPieceShape.length; py++) {
+                for (int px = 0; px < newPieceShape[0].length; px++) {
+                    if (newPieceShape[py][px]) {
+                        int boardX = x + px;
+                        int boardY = y + py;
+                        if (boardX < 0 || boardX >= 20 || boardY < 0 || boardY >= 20) {
+                            System.out.println("ERROR: Piece placement out of board bounds at (" + boardX + "," + boardY + ")");
+                            return false;
+                        }
+                        if (boardOccupied[boardY][boardX]) {
+                            System.out.println("ERROR: Overlap detected at (" + boardX + "," + boardY + ")");
+                            return false;
+                        }
+                    }
+                }
+            }
             
             // Record this piece as placed (in memory map)
             recordPiecePlacement(gameId, pieceId, pieceColor, x, y, rotation, flipped);
@@ -435,7 +581,12 @@ public class GameLogicServiceImpl implements GameLogicService {
             
             System.out.println("Piece placement successful!");
             System.out.println("=============================================================");
-            
+
+            // --- LIVE SCORE UPDATE: Only recalculate scores if the game is over ---
+            if (isGameOver(gameId)) {
+                calculateScores(gameId);
+            }
+
             return true;
         } catch (Exception e) {
             System.out.println("EXCEPTION in placePiece method: " + e.getMessage());
@@ -650,13 +801,9 @@ public class GameLogicServiceImpl implements GameLogicService {
                         
                         if (ex >= 0 && ex < 20 && ey >= 0 && ey < 20 && sameColorBoard[ey][ex]) {
                             hasEdgeTouch = true;
-                            System.out.println("ERROR: Found edge touch at (" + ex + "," + ey + 
-                                              ") with new piece cell at (" + boardX + "," + boardY + ")");
-                            break;
+                            System.out.println("ERROR: Found edge touch at (" + ex + "," + ey + ") with new piece cell at (" + boardX + "," + boardY + ")");
                         }
                     }
-                    
-                    if (hasEdgeTouch) break;
                     
                     // Check all diagonal neighbors
                     int[][] diagonals = {{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
@@ -666,19 +813,20 @@ public class GameLogicServiceImpl implements GameLogicService {
                         
                         if (dx >= 0 && dx < 20 && dy >= 0 && dy < 20 && sameColorBoard[dy][dx]) {
                             hasDiagonalTouch = true;
-                            System.out.println("Found diagonal touch at (" + dx + "," + dy + 
-                                              ") with new piece cell at (" + boardX + "," + boardY + ")");
-                            break;
+                            System.out.println("Found diagonal touch at (" + dx + "," + dy + ") with new piece cell at (" + boardX + "," + boardY + ")");
                         }
                     }
-                    
-                    if (hasDiagonalTouch) break;
                 }
             }
-            if (hasDiagonalTouch || hasEdgeTouch) break;
         }
         
-        // A valid move must have diagonal touch and must NOT have edge touch
+        // A valid move must have at least one diagonal touch and must NOT have any edge touch
+        if (!hasDiagonalTouch) {
+            System.out.println("ERROR: No diagonal (corner) touch found for this move.");
+        }
+        if (hasEdgeTouch) {
+            System.out.println("ERROR: Edge (side) touch found for this move.");
+        }
         return hasDiagonalTouch && !hasEdgeTouch;
     }
 
@@ -688,32 +836,44 @@ public class GameLogicServiceImpl implements GameLogicService {
      */
     private boolean[][] getPieceShape(String pieceId, String pieceColor, Integer rotation, Boolean flipped) {
         try {
-            // Create a temporary piece from the factory to get its shape
+            if (pieceId == null || pieceColor == null) {
+                System.out.println("ERROR in getPieceShape: pieceId or pieceColor is null. pieceId=" + pieceId + ", pieceColor=" + pieceColor);
+                return null;
+            }
             List<Piece> pieces = PieceFactory.createPieces(pieceColor);
+            if (pieces == null || pieces.isEmpty()) {
+                System.out.println("ERROR in getPieceShape: No pieces created for color '" + pieceColor + "'.");
+                return null;
+            }
             for (Piece piece : pieces) {
                 if (pieceId.equals(String.valueOf(piece.getId()))) {
                     boolean[][] originalShape = piece.getShape();
-                    
-                    // Apply rotation and flip if needed
+                    if (originalShape == null) {
+                        System.out.println("ERROR in getPieceShape: originalShape is null for pieceId=" + pieceId);
+                        return null;
+                    }
                     boolean[][] transformedShape = originalShape;
-                    
-                    // Apply rotation (0, 90, 180, 270 degrees)
-                    for (int r = 0; r < (rotation / 90); r++) {
+                    // Defensive: Ensure rotation is a multiple of 90 and non-null
+                    int safeRotation = (rotation == null) ? 0 : rotation;
+                    if (safeRotation % 90 != 0) {
+                        System.out.println("WARNING in getPieceShape: rotation " + safeRotation + " is not a multiple of 90. Forcing to 0.");
+                        safeRotation = 0;
+                    }
+                    for (int r = 0; r < (safeRotation / 90); r++) {
                         transformedShape = rotateShape(transformedShape);
                     }
-                    
-                    // Apply flip if needed
-                    if (flipped) {
+                    if (flipped != null && flipped) {
                         transformedShape = flipShape(transformedShape);
                     }
-                    
                     return transformedShape;
                 }
             }
+            System.out.println("ERROR: Piece ID '" + pieceId + "' not found for color '" + pieceColor + "'.");
+            System.out.println("Available IDs for color '" + pieceColor + "': " + pieces.stream().map(Piece::getId).toList());
         } catch (Exception e) {
             System.out.println("ERROR in getPieceShape: " + e.getMessage());
+            logger.error("Exception in getPieceShape for pieceId={}, pieceColor={}: {}", pieceId, pieceColor, e.getMessage(), e);
         }
-        
         return null;
     }
 
@@ -750,4 +910,90 @@ public class GameLogicServiceImpl implements GameLogicService {
         
         return flipped;
     }
-} 
+
+    /**
+     * Check if a player can make any legal move with their remaining pieces
+     */
+    @Override
+    public boolean canPlayerMove(GameUser player, Long gameId) {
+        if (player == null || player.getAvailablePieceIds() == null || player.getAvailablePieceIds().isEmpty()) {
+            return false;
+        }
+        // Build board occupancy
+        List<Map<String, Object>> placedPieces = getPlacedPieces(gameId);
+        boolean[][] boardOccupied = new boolean[20][20];
+        for (Map<String, Object> placed : placedPieces) {
+            String placedPieceId = (String) placed.get("pieceId");
+            String placedPieceColor = (String) placed.get("pieceColor");
+            int placedX = (int) placed.get("x");
+            int placedY = (int) placed.get("y");
+            Integer placedRotation = (Integer) placed.get("rotation");
+            Boolean placedFlipped = (Boolean) placed.get("flipped");
+            boolean[][] placedShape = getPieceShape(placedPieceId, placedPieceColor, placedRotation, placedFlipped);
+            if (placedShape == null) continue;
+            for (int py = 0; py < placedShape.length; py++) {
+                for (int px = 0; px < placedShape[0].length; px++) {
+                    if (placedShape[py][px]) {
+                        int boardX = placedX + px;
+                        int boardY = placedY + py;
+                        if (boardX >= 0 && boardX < 20 && boardY >= 0 && boardY < 20) {
+                            boardOccupied[boardY][boardX] = true;
+                        }
+                    }
+                }
+            }
+        }
+        // Try every piece, every position, every rotation/flip
+        String color = player.getColor().toString().toLowerCase();
+        for (String pieceId : player.getAvailablePieceIds()) {
+            for (int rotation : new int[]{0, 90, 180, 270}) {
+                for (boolean flipped : new boolean[]{false, true}) {
+                    boolean[][] shape = getPieceShape(pieceId, color, rotation, flipped);
+                    if (shape == null) continue;
+                    int height = shape.length;
+                    int width = shape[0].length;
+                    for (int y = 0; y <= 20 - height; y++) {
+                        for (int x = 0; x <= 20 - width; x++) {
+                            // Check for overlap
+                            boolean overlap = false;
+                            for (int py = 0; py < height; py++) {
+                                for (int px = 0; px < width; px++) {
+                                    if (shape[py][px]) {
+                                        int boardX = x + px;
+                                        int boardY = y + py;
+                                        if (boardOccupied[boardY][boardX]) {
+                                            overlap = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (overlap) break;
+                            }
+                            if (overlap) continue;
+                            // First piece: must touch starting corner
+                            List<Map<String, Object>> placedPiecesForCorner = getPlacedPieces(gameId);
+                            boolean hasPlayerPlacedPieces = placedPiecesForCorner.stream().anyMatch(p -> color.equalsIgnoreCase((String)p.get("pieceColor")));
+                            if (!hasPlayerPlacedPieces) {
+                                boolean isValidCorner = false;
+                                switch (player.getColor()) {
+                                    case BLUE -> isValidCorner = isCoveringOrTouchingCorner(x, y, 0, 0);
+                                    case YELLOW -> isValidCorner = isCoveringOrTouchingCorner(x, y, 19, 0);
+                                    case RED -> isValidCorner = isCoveringOrTouchingCorner(x, y, 0, 19);
+                                    case GREEN -> isValidCorner = isCoveringOrTouchingCorner(x, y, 19, 19);
+                                }
+                                if (!isValidCorner) continue;
+                                return true;
+                            } else {
+                                // Subsequent piece: must have diagonal touch, no edge touch
+                                if (validateDiagonalTouch(gameId, color, x, y, rotation, flipped, pieceId)) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+}

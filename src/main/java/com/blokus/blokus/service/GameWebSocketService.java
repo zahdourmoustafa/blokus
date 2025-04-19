@@ -113,4 +113,16 @@ public class GameWebSocketService {
         sendGameUpdate(gameId, "GAME_OVER", 
                       winnerUsername + " won the game!", data);
     }
+    
+    /**
+     * Send a player skipped update
+     * @param gameId The ID of the game
+     * @param playerName The name of the player who is skipped
+     */
+    public void sendPlayerSkippedUpdate(Long gameId, String playerName) {
+        Map<String, Object> data = Map.of(
+            "player", playerName
+        );
+        sendGameUpdate(gameId, "PLAYER_SKIPPED", playerName + ": No moves available, turn skipped.", data);
+    }
 } 

@@ -24,6 +24,20 @@
         >
           Blue Player
         </div>
+        <div
+          class="player-score"
+          style="
+            text-align: center;
+            font-weight: bold;
+            color: #003399;
+            margin-bottom: 4px;
+          "
+        >
+          Score:
+          <span th:text="${playerScores != null ? playerScores['blue'] : 0}"
+            >0</span
+          >
+        </div>
         <div class="player-pieces" data-player-color="blue">
           <!-- Blue Player Pieces -->
           <div
@@ -80,6 +94,20 @@
         >
           Yellow Player
         </div>
+        <div
+          class="player-score"
+          style="
+            text-align: center;
+            font-weight: bold;
+            color: #bfa100;
+            margin-bottom: 4px;
+          "
+        >
+          Score:
+          <span th:text="${playerScores != null ? playerScores['yellow'] : 0}"
+            >0</span
+          >
+        </div>
         <div class="player-pieces" data-player-color="yellow">
           <!-- Yellow Player Pieces -->
           <div
@@ -117,6 +145,20 @@
           th:classappend="${participants != null && participants.size() > 2 && participants[2].isBot() ? 'bot-player' : ''}"
         >
           Red Player
+        </div>
+        <div
+          class="player-score"
+          style="
+            text-align: center;
+            font-weight: bold;
+            color: #b30000;
+            margin-bottom: 4px;
+          "
+        >
+          Score:
+          <span th:text="${playerScores != null ? playerScores['red'] : 0}"
+            >0</span
+          >
         </div>
         <div class="player-pieces" data-player-color="red">
           <!-- Red Player Pieces -->
@@ -156,6 +198,20 @@
         >
           Green Player
         </div>
+        <div
+          class="player-score"
+          style="
+            text-align: center;
+            font-weight: bold;
+            color: #008000;
+            margin-bottom: 4px;
+          "
+        >
+          Score:
+          <span th:text="${playerScores != null ? playerScores['green'] : 0}"
+            >0</span
+          >
+        </div>
         <div class="player-pieces" data-player-color="green">
           <!-- Green Player Pieces -->
           <div
@@ -186,7 +242,7 @@
       <!-- Current Player Info -->
       <div class="game-info">
         <h3>
-          Current Player:
+          Joueur actuel :
           <span
             id="current-player"
             th:if="${game.getCurrentPlayer() != null}"
@@ -213,29 +269,18 @@
       <span th:if="${game.status.name() == 'WAITING'}"
         >Waiting for players to join...</span
       >
-      <span th:if="${game.status.name() == 'PLAYING'}">Game in progress</span>
-      <span th:if="${game.status.name() == 'FINISHED'}">Game completed</span>
+      <span th:if="${game.status.name() == 'PLAYING'}">Jeu en cours</span>
+      <span th:if="${game.status.name() == 'FINISHED'}">Jeu complet</span>
     </div>
 
     <!-- Game message notifications -->
     <div class="game-message" style="display: none"></div>
 
     <!-- Piece Controls - Moved outside the game board container -->
-<<<<<<< HEAD
+    <!-- Skip button is dynamically added by JS -->
     <div id="piece-controls" class="piece-controls">
-=======
-    <div
-      id="piece-controls"
-      class="piece-controls"
-      th:style="${selectedPieceId != null ? 'display: block;' : 'display: none;'}"
-    >
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
-      <button id="rotate-left" class="control-button">Rotate Left</button>
-      <button id="rotate-right" class="control-button">Rotate Right</button>
-      <button id="flip" class="control-button">Flip</button>
-      <p class="control-help">
-        Keyboard: Left/Right arrows to rotate, F to flip
-      </p>
+      <button id="rotate-left" class="control-button">Tourner à gauche</button>
+      <button id="rotate-right" class="control-button">Tourner à droite</button>
     </div>
 
     <div
@@ -245,33 +290,12 @@
     ></div>
 
     <!-- Game Instructions -->
-    <div class="game-instructions" th:if="${selectedPieceId == null}">
-      <p>Select a piece from your available pieces</p>
-    </div>
+
     <div class="game-instructions" th:if="${selectedPieceId != null}">
       <p>
-        Rotate/flip the piece with the controls, then click on the board to
-        place it
+        Tournez/retournez la pièce avec les commandes, puis cliquez sur le
+        plateau pour la placer
       </p>
-    </div>
-
-    <!-- Debugging tools -->
-    <div
-      class="debug-controls"
-      style="margin-top: 20px; text-align: center; display: block"
-    >
-      <button
-        onclick="enableCurrentPlayerPieces()"
-        style="
-          padding: 10px;
-          background-color: #007bff;
-          color: white;
-          border: none;
-          cursor: pointer;
-        "
-      >
-        Enable My Pieces
-      </button>
     </div>
 
     <!-- Forms for server-side actions -->

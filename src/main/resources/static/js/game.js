@@ -71,6 +71,9 @@ function initializeGame() {
   initializeCurrentPlayerDisplay();
   initializePieceControls();
 
+  // Add Skip Turn button after controls are initialized and in the right place
+  setTimeout(addSkipTurnButton, 0);
+
   // Force refresh to hide all used pieces
   hideAllUsedPieces();
 
@@ -100,17 +103,14 @@ function initializePieceSelection() {
       // Store selected piece
       GameState.selectedPiece = piece;
 
-<<<<<<< HEAD
       // Reset rotation for new selection
       GameState.selectedRotation = 0;
-      // Also reset the visual rotation
+      // Visually reset rotation
       const container = piece.querySelector(".piece-container");
       if (container) {
         container.style.transform = `rotate(0deg)`;
       }
 
-=======
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       // Get piece data
       const pieceId = piece.getAttribute("data-piece-id");
       const pieceColor = piece.getAttribute("data-piece-color");
@@ -193,7 +193,6 @@ function correctPieceOrientation(shape) {
 }
 
 /**
-<<<<<<< HEAD
  * Utility: Rotate a 2D array shape by 0, 90, 180, or 270 degrees clockwise
  */
 function rotateShape(shape, rotation) {
@@ -222,20 +221,6 @@ function getCurrentPieceShape() {
   const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
   const shape = [];
   const originalRows = GameState.selectedPiece.querySelectorAll(".piece-row");
-=======
- * Check if the placement is valid according to Blokus rules
- */
-function isValidPlacement(x, y) {
-  if (!GameState.selectedPiece) return false;
-
-  const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
-
-  // Get the piece shape
-  const pieceElement = GameState.selectedPiece;
-  const shape = [];
-  const originalRows = pieceElement.querySelectorAll(".piece-row");
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   originalRows.forEach((row) => {
     const rowCells = [];
     row.querySelectorAll(".piece-cell").forEach((cell) => {
@@ -243,7 +228,6 @@ function isValidPlacement(x, y) {
     });
     shape.push(rowCells);
   });
-<<<<<<< HEAD
   // Fix orientation for server, then rotate
   const processedShape = correctPieceOrientation(shape);
   return rotateShape(processedShape, GameState.selectedRotation || 0);
@@ -257,11 +241,6 @@ function isValidPlacement(x, y) {
   const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
   const processedShape = getCurrentPieceShape();
   if (!processedShape) return false;
-=======
-
-  // Fix the orientation to match server's expected format
-  const processedShape = correctPieceOrientation(shape);
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   const height = processedShape.length;
   const width = processedShape[0] ? processedShape[0].length : 0;
 
@@ -372,24 +351,7 @@ function showPlacementPreview(cell) {
 
   // Create the preview
   const pieceColor = GameState.selectedPiece.getAttribute("data-piece-color");
-<<<<<<< HEAD
   const processedShape = getCurrentPieceShape();
-=======
-
-  // Get the piece shape
-  const shape = [];
-  const originalRows = GameState.selectedPiece.querySelectorAll(".piece-row");
-  originalRows.forEach((row) => {
-    const rowCells = [];
-    row.querySelectorAll(".piece-cell").forEach((cell) => {
-      rowCells.push(cell.classList.contains(`${pieceColor}`));
-    });
-    shape.push(rowCells);
-  });
-
-  // Fix the orientation
-  const processedShape = correctPieceOrientation(shape);
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
 
   // Create preview container
   GameState.piecePreview = document.createElement("div");
@@ -491,13 +453,8 @@ function placePiece(x, y) {
   const formData = new FormData();
   formData.append("x", x);
   formData.append("y", y);
-<<<<<<< HEAD
   formData.append("rotation", GameState.selectedRotation || 0);
   formData.append("flipped", false); // Always false for now
-=======
-  formData.append("rotation", 0); // Always 0
-  formData.append("flipped", false); // Always false
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   formData.append("pieceId", pieceId);
   formData.append("pieceColor", pieceColor);
 
@@ -510,11 +467,7 @@ function placePiece(x, y) {
     ?.getAttribute("content");
 
   // Show the piece on the board immediately for better UX
-<<<<<<< HEAD
-  addPieceToBoard(pieceId, pieceColor, x, y, GameState.selectedRotation || 0);
-=======
-  addPieceToBoard(pieceId, pieceColor, x, y);
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
+  addPieceToBoard(pieceId, pieceColor, x, y, GameState.selectedRotation);
 
   // Clear the selection
   GameState.selectedPiece = null;
@@ -570,74 +523,48 @@ function placePiece(x, y) {
 }
 
 /**
-<<<<<<< HEAD
  * Update addPieceToBoard to accept a rotation parameter
  */
 function addPieceToBoard(pieceId, pieceColor, x, y, rotation) {
   if (!pieceId || !pieceColor || x === undefined || y === undefined) {
     return;
   }
-  // If this is the currently selected piece and no explicit rotation is given, use the rotated shape
   let pieceShape = null;
-  let useRotation = rotation;
-  if (typeof useRotation !== "number") {
-    // Use the current selected rotation if not provided
-    useRotation =
-      GameState.selectedPiece &&
-      GameState.selectedPiece.getAttribute("data-piece-id") === pieceId &&
-      GameState.selectedPiece.getAttribute("data-piece-color") === pieceColor
-        ? GameState.selectedRotation || 0
-        : 0;
-  }
-  const targetPieceElement = document.querySelector(
-    `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
-  );
-  if (targetPieceElement) {
-=======
- * Add a piece to the board
- */
-function addPieceToBoard(pieceId, pieceColor, x, y) {
-  if (!pieceId || !pieceColor || x === undefined || y === undefined) {
-    return;
-  }
-
-  // Find the piece by ID to get its shape
-  const targetPieceElement = document.querySelector(
-    `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
-  );
-
-  if (targetPieceElement) {
-    // Extract the shape from the DOM
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
-    const shape = [];
-    const rows = targetPieceElement.querySelectorAll(".piece-row");
-    rows.forEach((row) => {
-      const rowCells = [];
-      row.querySelectorAll(".piece-cell").forEach((cell) => {
-        rowCells.push(cell.classList.contains(`${pieceColor}`));
+  // If this is the currently selected piece and no rotation is provided, use the rotated shape
+  if (
+    GameState.selectedPiece &&
+    GameState.selectedPiece.getAttribute("data-piece-id") === pieceId &&
+    GameState.selectedPiece.getAttribute("data-piece-color") === pieceColor &&
+    (rotation === undefined || rotation === null)
+  ) {
+    pieceShape = getCurrentPieceShape();
+  } else {
+    // Fallback: extract shape from DOM and correct orientation
+    const targetPieceElement = document.querySelector(
+      `.game-piece[data-piece-id="${pieceId}"][data-piece-color="${pieceColor}"]`
+    );
+    if (targetPieceElement) {
+      const shape = [];
+      const rows = targetPieceElement.querySelectorAll(".piece-row");
+      rows.forEach((row) => {
+        const rowCells = [];
+        row.querySelectorAll(".piece-cell").forEach((cell) => {
+          rowCells.push(cell.classList.contains(`${pieceColor}`));
+        });
+        shape.push(rowCells);
       });
-      shape.push(rowCells);
-    });
-<<<<<<< HEAD
-    let processedShape = correctPieceOrientation(shape);
-    processedShape = rotateShape(processedShape, useRotation);
-    pieceShape = processedShape;
+      let processedShape = correctPieceOrientation(shape);
+      if (rotation !== undefined && rotation !== null) {
+        processedShape = rotateShape(processedShape, rotation);
+      }
+      pieceShape = processedShape;
+    }
   }
   if (pieceShape) {
     applyShapeToBoard(pieceShape, x, y, pieceColor, pieceId);
   } else {
     applyBasicPiece(x, y, pieceColor, pieceId);
   }
-=======
-
-    const pieceShape = correctPieceOrientation(shape);
-    applyShapeToBoard(pieceShape, x, y, pieceColor, pieceId);
-  } else {
-    // Fallback if piece element not found
-    applyBasicPiece(x, y, pieceColor, pieceId);
-  }
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   // Track that this piece is used
   GameState.usedPieceIds.add(pieceId);
   if (GameState.usedPieceByColor[pieceColor]) {
@@ -764,6 +691,9 @@ function initializeWebSocket() {
               case "GAME_OVER":
                 handleGameOver(gameUpdate.data);
                 break;
+              case "PLAYER_SKIPPED":
+                showMessage(gameUpdate.message);
+                break;
               default:
                 break;
             }
@@ -833,95 +763,63 @@ function handleNextTurn(turnUpdate) {
 
   // Update current player display
   const currentPlayerSpan = document.getElementById("current-player");
+  const skipButton = document.getElementById("skip-turn");
   if (currentPlayerSpan) {
     currentPlayerSpan.textContent = nextPlayerUsername;
     currentPlayerSpan.classList.remove("current-player-active");
 
     if (nextPlayerUsername === GameState.currentUsername) {
-      // It's the current user's turn
       currentPlayerSpan.classList.add("current-player-active");
       showMessage("It's your turn!");
       updatePieceSelectionState(true);
+      if (skipButton) skipButton.style.display = "inline-block";
     } else if (nextPlayerUsername.startsWith("Bot ")) {
-      // It's a bot's turn
       showMessage("Bot is making a move...");
       updatePieceSelectionState(false);
-
-      // For bot turns, refresh game state after a short delay
+      if (skipButton) skipButton.style.display = "none";
       setTimeout(() => {
         refreshGameState();
       }, 1000);
     } else {
-      // It's another human player's turn
       showMessage("It's " + nextPlayerUsername + "'s turn");
       updatePieceSelectionState(false);
+      if (skipButton) skipButton.style.display = "none";
     }
 
     // Hide used pieces
     hideAllUsedPieces();
   }
+
+  // Dispatch custom event for skip button logic
+  document.dispatchEvent(new Event("nextTurn"));
 }
 
 /**
  * Handle a piece placement update from the server
  */
 function handlePiecePlacement(placementUpdate) {
-  // Clear any pending WebSocket update timeout
   if (window.lastWsUpdateTimeout) {
     clearTimeout(window.lastWsUpdateTimeout);
     window.lastWsUpdateTimeout = null;
   }
-<<<<<<< HEAD
-  // Extract placement data
   const data = placementUpdate.data;
   const isBot = data.username && data.username.toLowerCase().includes("bot");
-  // Add the piece to the board using server rotation
   addPieceToBoard(data.pieceId, data.pieceColor, data.x, data.y, data.rotation);
-=======
-
-  // Extract placement data
-  const data = placementUpdate.data;
-  const isBot = data.username && data.username.toLowerCase().includes("bot");
-
-  // Add the piece to the board
-  addPieceToBoard(data.pieceId, data.pieceColor, data.x, data.y);
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
-  // Track that this piece has been used
   GameState.usedPieceIds.add(data.pieceId);
   if (data.pieceColor && GameState.usedPieceByColor[data.pieceColor]) {
     GameState.usedPieceByColor[data.pieceColor].add(data.pieceId);
   }
-<<<<<<< HEAD
-=======
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
-  // Hide the corresponding piece in the player's box
   const pieceElements = document.querySelectorAll(
     `.game-piece[data-piece-id="${data.pieceId}"][data-piece-color="${data.pieceColor}"]`
   );
-<<<<<<< HEAD
-=======
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
   pieceElements.forEach((pieceElement) => {
     pieceElement.classList.add("used");
     pieceElement.classList.remove("selectable");
     pieceElement.style.display = "none";
   });
-<<<<<<< HEAD
-=======
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
-  // For bot moves, ensure the correct piece ID is on the board
   if (isBot) {
     ensureCorrectPieceIdOnBoard(data.pieceId, data.pieceColor, data.x, data.y);
   }
-<<<<<<< HEAD
-=======
-
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
-  // Refresh the UI to ensure all pieces are properly hidden
   hideAllUsedPieces();
 }
 
@@ -932,15 +830,37 @@ function handleGameOver(data) {
   // Display game over and final scores
   const gameStatus = document.querySelector(".game-status");
   if (gameStatus) {
-    let scoresHtml = "<h2>Game Over! Winner: " + data.winnerUsername + "</h2>";
-    scoresHtml += '<ul class="final-scores">';
+    // Add a clear game over message with styling
+    let scoresHtml =
+      "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin: 10px 0; border: 2px solid #f5c6cb;'>";
+    scoresHtml +=
+      "<h2 style='color: #721c24; text-align: center;'>Game Over!</h2>";
+    scoresHtml +=
+      "<h3 style='color: #721c24; text-align: center;'>Winner: " +
+      data.winnerUsername +
+      "</h3>";
+    scoresHtml += "</div>";
+    scoresHtml +=
+      '<ul class="final-scores" style="list-style-type: none; padding: 0; margin: 15px 0;">';
 
     for (const [player, score] of Object.entries(data.scores)) {
-      scoresHtml += `<li>${player}: ${score} points</li>`;
+      scoresHtml += `<li style="padding: 8px; margin: 5px 0; background-color: #f8f9fa; border-radius: 5px; border-left: 5px solid #5c6bc0;">${player}: ${score} points</li>`;
     }
 
     scoresHtml += "</ul>";
     gameStatus.innerHTML = scoresHtml;
+
+    // Also show a message notification
+    showMessage("Game Over! Winner: " + data.winnerUsername);
+
+    // Disable all piece selection
+    updatePieceSelectionState(false);
+
+    // Hide any skip turn button
+    const skipButton = document.getElementById("skip-turn");
+    if (skipButton) {
+      skipButton.style.display = "none";
+    }
   }
 }
 
@@ -1169,24 +1089,19 @@ function updatePieceSelectionState(enable) {
  */
 function updateBoard(boardData) {
   boardData.forEach((cell) => {
-<<<<<<< HEAD
     const { x, y, color, pieceId, rotation } = cell;
-    if (color) {
-      addPieceToBoard(pieceId, color, x, y, rotation);
-=======
-    const { x, y, color, pieceId } = cell;
     if (color) {
       let cellElement = document.querySelector(
         `.board-cell[data-x="${x}"][data-y="${y}"]`
       );
       if (!cellElement) return;
-
       // Set the cell color and mark as occupied
       cellElement.style.backgroundColor = color.toLowerCase();
       cellElement.classList.add("occupied");
       cellElement.setAttribute("data-piece-id", pieceId);
       cellElement.setAttribute("data-color", color.toLowerCase());
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
+      // Actually draw the rotated piece on the board
+      addPieceToBoard(pieceId, color, x, y, rotation);
     }
   });
 }
@@ -1604,7 +1519,6 @@ function initializePieceControls() {
   const rotateRightButton = document.getElementById("rotate-right");
   const flipButton = document.getElementById("flip");
 
-<<<<<<< HEAD
   // Helper to update the selected piece's visual rotation
   function updateSelectedPieceRotation() {
     if (GameState.selectedPiece) {
@@ -1623,24 +1537,14 @@ function initializePieceControls() {
       GameState.selectedRotation =
         (GameState.selectedRotation - 90 + 360) % 360;
       updateSelectedPieceRotation();
-=======
-  // Add rotation and flip functionality
-  if (rotateLeftButton) {
-    rotateLeftButton.addEventListener("click", function () {
-      // Implement rotation later if needed
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
     });
   }
 
   if (rotateRightButton) {
     rotateRightButton.addEventListener("click", function () {
-<<<<<<< HEAD
       if (!GameState.selectedPiece) return;
       GameState.selectedRotation = (GameState.selectedRotation + 90) % 360;
       updateSelectedPieceRotation();
-=======
-      // Implement rotation later if needed
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
     });
   }
 
@@ -1656,23 +1560,15 @@ function initializePieceControls() {
 
     // Left arrow for rotate left
     if (event.key === "ArrowLeft") {
-<<<<<<< HEAD
       GameState.selectedRotation =
         (GameState.selectedRotation - 90 + 360) % 360;
       updateSelectedPieceRotation();
-=======
-      // Implement rotation later if needed
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       event.preventDefault();
     }
     // Right arrow for rotate right
     else if (event.key === "ArrowRight") {
-<<<<<<< HEAD
       GameState.selectedRotation = (GameState.selectedRotation + 90) % 360;
       updateSelectedPieceRotation();
-=======
-      // Implement rotation later if needed
->>>>>>> e0ce096cdfa21cd48f421a4b22384d38d1fb9761
       event.preventDefault();
     }
     // F for flip
@@ -1681,4 +1577,62 @@ function initializePieceControls() {
       event.preventDefault();
     }
   });
+}
+
+// Add Skip Turn button to the controls area if not already present
+function addSkipTurnButton() {
+  let controlsArea = document.querySelector(".piece-controls");
+  let skipButton = document.getElementById("skip-turn");
+  if (!skipButton) {
+    skipButton = document.createElement("button");
+    skipButton.id = "skip-turn";
+    skipButton.textContent = "Skip Turn";
+    skipButton.style.display = "none";
+    skipButton.style.marginLeft = "10px";
+    if (controlsArea) {
+      controlsArea.appendChild(skipButton);
+    } else {
+      document.body.appendChild(skipButton);
+      console.log(
+        "[Blokus] .piece-controls not found, adding Skip Turn button to body."
+      );
+    }
+    skipButton.addEventListener("click", function () {
+      fetch(`/games/${GameState.gameId}/api/skip-turn`, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      }).then((response) => {
+        if (!response.ok) {
+          showMessage("Failed to skip turn.");
+        }
+      });
+    });
+  }
+  // Show the skip button only when it's the current user's turn
+  function updateSkipButtonVisibility() {
+    // Find the current player name from the UI
+    const currentPlayerSpan = document.getElementById("current-player");
+    if (
+      currentPlayerSpan &&
+      GameState.currentUsername &&
+      currentPlayerSpan.textContent.trim() === GameState.currentUsername
+    ) {
+      skipButton.style.display = "";
+    } else {
+      skipButton.style.display = "none";
+    }
+  }
+  // Call on load and on turn change
+  updateSkipButtonVisibility();
+  document.addEventListener("nextTurn", updateSkipButtonVisibility);
+  if (typeof refreshGameState === "function") {
+    const origRefresh = refreshGameState;
+    window.refreshGameState = function () {
+      origRefresh.apply(this, arguments);
+      updateSkipButtonVisibility();
+    };
+  }
 }

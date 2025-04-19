@@ -71,6 +71,14 @@ public interface GameLogicService {
      */
     List<Map<String, Object>> getPlacedPieces(Long gameId);
 
+    /**
+     * Check if the given player can make any legal move with their remaining pieces
+     * @param player The GameUser to check
+     * @param gameId The game ID
+     * @return true if the player can move, false otherwise
+     */
+    boolean canPlayerMove(GameUser player, Long gameId);
+
     // Methods removed: 
     // initializePieces, initializePlayerPieces, isValidMove, placePiece, 
     // getAvailablePieces, getAllPieces, canPlayerMove, getStartCorner

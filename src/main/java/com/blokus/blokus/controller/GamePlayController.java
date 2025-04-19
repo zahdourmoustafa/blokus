@@ -86,6 +86,14 @@ public class GamePlayController {
             List<GameUser> participants = gameService.getGameParticipants(gameId);
             model.addAttribute("participants", participants);
 
+            // Add player scores to the model for UI display
+            Map<String, Integer> playerScores = new HashMap<>();
+            String[] colorOrder = {"blue", "green", "red", "yellow"};
+            for (int i = 0; i < participants.size() && i < colorOrder.length; i++) {
+                playerScores.put(colorOrder[i], participants.get(i).getScore());
+            }
+            model.addAttribute("playerScores", playerScores);
+
             // Get all placed pieces to hide them in the UI
             List<Map<String, Object>> placedPiecesData = gameLogicService.getPlacedPieces(gameId);
             Set<String> placedPieceIds = new HashSet<>();

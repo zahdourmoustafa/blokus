@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -283,5 +284,61 @@ public class GamePlayRestController {
         } catch (Exception e) {
             logger.error("CRITICAL ERROR in REST processNextAiTurn: {}", e.getMessage(), e);
         }
+    }
+
+    @PostMapping("/api/skip-turn")
+    public ResponseEntity<?> skipTurn(@PathVariable Long gameId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                .body(Map.of("error", "User not authenticated"));
+        }
+        User currentUser = userService.findByUsername(auth.getName());
+        Game game = gameService.findById(gameId);
+        if (game == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                .body(Map.of("error", "Game not found"));
+        }
+        GameUser currentPlayer = game.getCurrentPlayer();
+        if (currentPlayer == null || currentPlayer.getUser() == null ||
+            !currentPlayer.getUser().getId().equals(currentUser.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                .body(Map.of("error", "Not your turn"));
+        }
+        // Notify skip and advance turn
+        String playerName = currentUser.getUsername();
+        gameWebSocketService.sendPlayerSkippedUpdate(gameId, playerName);
+        GameUser nextPlayer = gameLogicService.nextTurn(gameId);
+        if (nextPlayer != null) {
+            String nextPlayerName = nextPlayer.isBot() ? "Bot " + nextPlayer.getColor().name().toLowerCase() : (nextPlayer.getUser() != null ? nextPlayer.getUser().getUsername() : "Unknown");
+            gameWebSocketService.sendNextTurnUpdate(gameId, nextPlayer.getColor().name().toLowerCase(), nextPlayerName);
+        }
+        return ResponseEntity.ok(Map.of("status", "skipped"));
+    }
+
+    /**
+     * Check if the current player can move (for skip button logic)
+     */
+    @GetMapping("/api/can-move")
+    public ResponseEntity<?> canCurrentPlayerMove(@PathVariable Long gameId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                 .body(Map.of("error", "User not authenticated"));
+        }
+        User currentUser = userService.findByUsername(auth.getName());
+        Game game = gameService.findById(gameId);
+        if (game == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                 .body(Map.of("error", "Game not found"));
+        }
+        GameUser currentPlayer = game.getCurrentPlayer();
+        if (currentPlayer == null || currentPlayer.getUser() == null ||
+            !currentPlayer.getUser().getId().equals(currentUser.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                 .body(Map.of("error", "Not your turn"));
+        }
+        boolean canMove = gameLogicService.canPlayerMove(currentPlayer, gameId);
+        return ResponseEntity.ok(Map.of("canMove", canMove));
     }
 } 
