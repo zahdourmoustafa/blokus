@@ -79,6 +79,14 @@ function initializeGame() {
 
   // Refresh the game state
   setTimeout(refreshGameState, 500);
+
+  // Reset the winner/score box to placeholder at game start
+  const box = document.getElementById("winner-score-box");
+  if (box) {
+    box.innerHTML =
+      '<div class="placeholder">Le jeu n\'est pas encore terminé.<br>Scores en attente…</div>';
+    box.style.background = "#fffbe6";
+  }
 }
 
 // ==========================================
@@ -827,40 +835,35 @@ function handlePiecePlacement(placementUpdate) {
  * Handle a game over update
  */
 function handleGameOver(data) {
-  // Display game over and final scores
-  const gameStatus = document.querySelector(".game-status");
-  if (gameStatus) {
-    // Add a clear game over message with styling
-    let scoresHtml =
-      "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin: 10px 0; border: 2px solid #f5c6cb;'>";
-    scoresHtml +=
-      "<h2 style='color: #721c24; text-align: center;'>Game Over!</h2>";
-    scoresHtml +=
-      "<h3 style='color: #721c24; text-align: center;'>Winner: " +
-      data.winnerUsername +
-      "</h3>";
-    scoresHtml += "</div>";
-    scoresHtml +=
-      '<ul class="final-scores" style="list-style-type: none; padding: 0; margin: 15px 0;">';
-
+  // Fill the winner/score box
+  const box = document.getElementById("winner-score-box");
+  if (box) {
+    let html = `<div class="winner">🏆 Gagnant : ${data.winnerUsername}</div>`;
+    html += '<ul class="scores-list">';
     for (const [player, score] of Object.entries(data.scores)) {
-      scoresHtml += `<li style="padding: 8px; margin: 5px 0; background-color: #f8f9fa; border-radius: 5px; border-left: 5px solid #5c6bc0;">${player}: ${score} points</li>`;
+      html += `<li>${player} : ${score} points</li>`;
     }
+    html += "</ul>";
+    box.innerHTML = html;
+    box.style.background = "#e6ffe6"; // Optional: highlight on game end
+  }
 
-    scoresHtml += "</ul>";
-    gameStatus.innerHTML = scoresHtml;
+  // Change status text
+  const status = document.querySelector(".game-status");
+  if (status) {
+    status.textContent = "Jeu complet";
+  }
 
-    // Also show a message notification
-    showMessage("Game Over! Winner: " + data.winnerUsername);
+  // Also show a message notification
+  showMessage("Game Over! Winner: " + data.winnerUsername);
 
-    // Disable all piece selection
-    updatePieceSelectionState(false);
+  // Disable all piece selection
+  updatePieceSelectionState(false);
 
-    // Hide any skip turn button
-    const skipButton = document.getElementById("skip-turn");
-    if (skipButton) {
-      skipButton.style.display = "none";
-    }
+  // Hide any skip turn button
+  const skipButton = document.getElementById("skip-turn");
+  if (skipButton) {
+    skipButton.style.display = "none";
   }
 }
 

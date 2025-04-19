@@ -578,3 +578,36 @@ td[data-x="19"][data-y="19"] {
   border-radius: 4px;
   transition: all 0.3s ease-in-out;
 }
+
+.winner-score-box {
+  background: #fffbe6;
+  border: 2px solid #ffd700;
+  border-radius: 12px;
+  margin: 24px auto 0 auto;
+  padding: 24px 32px;
+  max-width: 500px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  text-align: center;
+  font-size: 1.2rem;
+  min-height: 80px;
+  transition: background 0.3s;
+}
+.winner-score-box .winner {
+  font-weight: bold;
+  color: #d4af37;
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+}
+.winner-score-box .scores-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.winner-score-box .scores-list li {
+  margin: 6px 0;
+  font-size: 1.1rem;
+}
+.winner-score-box .placeholder {
+  color: #888;
+  font-style: italic;
+}

@@ -283,6 +283,13 @@
       <button id="rotate-right" class="control-button">Tourner à droite</button>
     </div>
 
+    <!-- Winner/Score Box: always visible -->
+    <div id="winner-score-box" class="winner-score-box">
+      <div class="placeholder">
+        Le jeu n'est pas encore terminé.<br />Scores en attente…
+      </div>
+    </div>
+
     <div
       th:if="${errorMessage}"
       class="error-message"
