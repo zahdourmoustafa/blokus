@@ -1,0 +1,23 @@
+services:
+  blokus-app:
+    build: .
+    container_name: blokus-app
+    ports:
+      - "8082:8082"
+    volumes:
+      - h2-data:/data # Mount the volume to /data inside the container
+    environment:
+      # Use an embedded H2 database with mode=MySQL for compatibility
+      - SPRING_DATASOURCE_URL=jdbc:h2:file:/data/blokusdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+      # Use the same default credentials H2 expects (which appears to be empty password)
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # Ensure the schema is validated (instead of update)
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      # Enable console for troubleshooting
+      - SPRING_H2_CONSOLE_ENABLED=true
+      - SPRING_H2_CONSOLE_SETTINGS_WEB_ALLOW_OTHERS=true
+
+volumes:
+  h2-data:
+    driver: local

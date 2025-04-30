@@ -1,0 +1,13 @@
+.idea/
+.vscode/
+target/
+.git/
+.gitignore
+.gitattributes
+mvnw
+mvnw.cmd
+*.log
+
+# Ignore Docker specific files
+Dockerfile
+docker-compose.yml 

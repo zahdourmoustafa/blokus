@@ -3,6 +3,7 @@ package com.blokus.blokus.service;
 import java.util.List;
 
 import com.blokus.blokus.dto.GameCreateDto;
+import com.blokus.blokus.dto.GameStatisticsDto;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.User;
@@ -118,4 +119,12 @@ public interface GameService {
      */
     boolean placePiece(Long gameId, Long userId, String pieceId, String pieceColor, 
                        int x, int y, int rotation, boolean flipped);
+
+    /**
+     * Récupère les statistiques des parties terminées pour un utilisateur
+     *
+     * @param userId L'ID de l'utilisateur
+     * @return Liste des DTO contenant les statistiques des parties terminées
+     */
+    List<GameStatisticsDto> findUserCompletedGamesWithDetails(Long userId);
 } 

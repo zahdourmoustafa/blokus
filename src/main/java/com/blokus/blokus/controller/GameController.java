@@ -13,10 +13,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.blokus.blokus.dto.GameCreateDto;
+import com.blokus.blokus.dto.GameStatisticsDto;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.User;
@@ -30,7 +30,6 @@ import jakarta.validation.Valid;
  * Contrôleur pour la gestion des parties
  */
 @Controller
-@RequestMapping("/games")
 public class GameController {
     
     private static final Logger logger = LoggerFactory.getLogger(GameController.class);
@@ -49,7 +48,7 @@ public class GameController {
     /**
      * Affiche la page de liste des parties
      */
-    @GetMapping
+    @GetMapping("/games")
     public String listGames(Model model, @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails) {
         // Get current authenticated user
         User user = userService.findByUsername(userDetails.getUsername());
@@ -70,7 +69,7 @@ public class GameController {
     /**
      * Affiche le formulaire de création de partie
      */
-    @GetMapping("/create")
+    @GetMapping("/games/create")
     public String showCreateForm(Model model) {
         model.addAttribute("gameCreateDto", new GameCreateDto());
         return "game/create";
@@ -79,7 +78,7 @@ public class GameController {
     /**
      * Crée une nouvelle partie
      */
-    @PostMapping("/create")
+    @PostMapping("/games/create")
     public String createGame(@Valid @ModelAttribute("gameCreateDto") GameCreateDto gameCreateDto,
             BindingResult bindingResult, Model model,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
@@ -111,7 +110,7 @@ public class GameController {
     /**
      * Affiche la page de détail d'une partie
      */
-    @GetMapping("/{id}")
+    @GetMapping("/games/{id}")
     public String gameDetail(@PathVariable Long id, Model model,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
             RedirectAttributes redirectAttributes) {
@@ -159,7 +158,7 @@ public class GameController {
     /**
      * Permet à un utilisateur de rejoindre une partie
      */
-    @PostMapping("/{id}/join")
+    @PostMapping("/games/{id}/join")
     public String joinGame(@PathVariable Long id, 
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
             RedirectAttributes redirectAttributes) {
@@ -182,7 +181,7 @@ public class GameController {
     /**
      * Permet à un utilisateur de quitter une partie
      */
-    @PostMapping("/{id}/leave")
+    @PostMapping("/games/{id}/leave")
     public String leaveGame(@PathVariable Long id,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
             RedirectAttributes redirectAttributes) {
@@ -212,7 +211,7 @@ public class GameController {
     /**
      * Permet d'ajouter un bot à une partie
      */
-    @PostMapping("/{id}/add-bot")
+    @PostMapping("/games/{id}/add-bot")
     public String addBotToGame(@PathVariable Long id,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
             RedirectAttributes redirectAttributes) {
@@ -248,7 +247,7 @@ public class GameController {
     /**
      * Permet au créateur d'annuler une partie
      */
-    @PostMapping("/{id}/cancel")
+    @PostMapping("/games/{id}/cancel")
     public String cancelGame(@PathVariable Long id,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
             RedirectAttributes redirectAttributes) {
@@ -274,7 +273,7 @@ public class GameController {
     /**
      * Permet au créateur de démarrer manuellement une partie
      */
-    @PostMapping("/{id}/start")
+    @PostMapping("/games/{id}/start")
     public String startGame(@PathVariable Long id,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails,
             RedirectAttributes redirectAttributes) {
@@ -313,6 +312,30 @@ public class GameController {
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Erreur: " + e.getMessage());
             return "redirect:/games/" + id;
+        }
+    }
+
+    /**
+     * Affiche la page des statistiques de l'utilisateur
+     */
+    @GetMapping("/statistics")
+    public String showUserStatistics(Model model, @AuthenticationPrincipal org.springframework.security.core.userdetails.User userDetails) {
+        try {
+            User user = userService.findByUsername(userDetails.getUsername());
+            // We need a DTO to hold the combined game and player stats for the view
+            List<GameStatisticsDto> statistics = gameService.findUserCompletedGamesWithDetails(user.getId()); 
+            
+            model.addAttribute("statistics", statistics);
+            model.addAttribute("user", user); // Pass user for potential display needs
+            
+            logger.info("Utilisateur {} a consulté ses statistiques", user.getUsername());
+            
+            return "statistics"; // Name of the new Thymeleaf template
+        } catch (Exception e) {
+            logger.error("Erreur lors de la récupération des statistiques pour {}: {}", userDetails.getUsername(), e.getMessage());
+            // Redirect to home or an error page? Redirecting home for now.
+            model.addAttribute("errorMessage", "Erreur lors de la récupération de vos statistiques.");
+            return "redirect:/"; 
         }
     }
 } 

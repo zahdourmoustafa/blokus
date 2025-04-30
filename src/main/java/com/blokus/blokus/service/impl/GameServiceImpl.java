@@ -10,14 +10,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.blokus.blokus.dto.GameCreateDto;
+import com.blokus.blokus.dto.GameStatisticsDto;
+import com.blokus.blokus.dto.GameStatisticsDto.PlayerScoreDto;
 import com.blokus.blokus.model.Game;
 import com.blokus.blokus.model.Game.GameMode;
 import com.blokus.blokus.model.Game.GameStatus;
 import com.blokus.blokus.model.GameUser;
 import com.blokus.blokus.model.GameUser.PlayerColor;
-import com.blokus.blokus.model.User;
 import com.blokus.blokus.model.Piece;
 import com.blokus.blokus.model.PieceFactory;
+import com.blokus.blokus.model.User;
 import com.blokus.blokus.repository.GameRepository;
 import com.blokus.blokus.repository.GameUserRepository;
 import com.blokus.blokus.service.GameLogicService;
@@ -545,5 +547,67 @@ public class GameServiceImpl implements GameService {
         boolean placed = gameLogicService.placePiece(gameId, userId, pieceId, pieceColor, x, y, rotation, flipped);
 
         return placed;
+    }
+
+    @Override
+    @Transactional(readOnly = true) // Good practice for read-only operations
+    public List<GameStatisticsDto> findUserCompletedGamesWithDetails(Long userId) {
+        // 1. Find all GameUser entries for the user
+        List<GameUser> userGameEntries = gameUserRepository.findByUserId(userId);
+
+        // 2. Filter for completed games and map to DTOs
+        return userGameEntries.stream()
+            .map(GameUser::getGame) // Get the Game object from each GameUser entry
+            .filter(game -> game.getStatus() == GameStatus.FINISHED) // Keep only finished games
+            .distinct() // Avoid processing the same game multiple times if user has multiple entries (shouldn't happen ideally)
+            .map(game -> {
+                // 3. For each finished game, fetch details
+                List<GameUser> allPlayersInGame = gameUserRepository.findByGameId(game.getId());
+                
+                // 4. Create PlayerScoreDtos
+                List<PlayerScoreDto> playerScores = allPlayersInGame.stream()
+                    .map(gu -> {
+                        String username = gu.isBot() ? "Bot (" + gu.getColor().name() + ")" : 
+                                       (gu.getUser() != null ? gu.getUser().getUsername() : "Inconnu");
+                        int score = gu.getScore(); 
+                        return new PlayerScoreDto(username, score);
+                    })
+                    .collect(Collectors.toList());
+
+                // 5. Determine winner based on highest score (Blokus: Max score = least penalty)
+                String winnerUsername = "Égalité"; // Default to draw
+                GameUser winner = null;
+                int bestScore = Integer.MIN_VALUE; // Start with lowest possible value
+                boolean isDraw = false;
+
+                if (!allPlayersInGame.isEmpty()) {
+                    for (GameUser player : allPlayersInGame) {
+                        if (player.getScore() > bestScore) { // Found a better (less negative) score
+                            bestScore = player.getScore();
+                            winner = player;
+                            isDraw = false; // Reset draw flag
+                        } else if (player.getScore() == bestScore) {
+                             // Found another player with the same best score
+                            // If the current winner is null (first player case) or scores match, mark as draw
+                            isDraw = true; 
+                        }
+                    }
+                }
+                
+                if (winner != null && !isDraw) {
+                     winnerUsername = winner.isBot() ? "Bot (" + winner.getColor().name() + ")" : 
+                                    (winner.getUser() != null ? winner.getUser().getUsername() : "Inconnu");
+                } // Otherwise, it remains "Égalité"
+
+                // 6. Create GameStatisticsDto
+                return new GameStatisticsDto(
+                    game.getId(),
+                    game.getName(),
+                    game.getEndedAt(), // Use endedAt for completion time
+                    winnerUsername,
+                    playerScores
+                );
+            })
+            .collect(Collectors.toList());
     }
 } 
