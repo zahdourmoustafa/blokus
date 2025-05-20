@@ -50,6 +50,10 @@ public class GameStateRestController {
             Map<String, Object> gameState = new HashMap<>();
             gameState.put("gameId", game.getId());
             gameState.put("status", game.getStatus().toString());
+            gameState.put("mode", game.getMode().toString());
+            if (game.getMode() == Game.GameMode.TIMED) {
+                gameState.put("turnStartTime", game.getTurnStartTime());
+            }
 
             // Get current player info
             GameUser currentPlayer = game.getCurrentPlayer();

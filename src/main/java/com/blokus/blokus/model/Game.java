@@ -52,6 +52,9 @@ public class Game {
     @Column(name = "current_player_index")
     private Integer currentPlayerIndex;
     
+    @Column(name = "turn_start_time")
+    private LocalDateTime turnStartTime;
+    
     // Enum pour le statut de la partie
     public enum GameStatus {
         WAITING, PLAYING, FINISHED
@@ -328,6 +331,18 @@ public class Game {
                 }
             }
         }
+    }
+    
+    public void setCurrentPlayerIndex(Integer currentPlayerIndex) {
+        this.currentPlayerIndex = currentPlayerIndex;
+    }
+
+    public LocalDateTime getTurnStartTime() {
+        return turnStartTime;
+    }
+
+    public void setTurnStartTime(LocalDateTime turnStartTime) {
+        this.turnStartTime = turnStartTime;
     }
     
     // Initialisation

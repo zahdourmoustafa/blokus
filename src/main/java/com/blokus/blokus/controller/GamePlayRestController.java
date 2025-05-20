@@ -3,6 +3,7 @@ package com.blokus.blokus.controller;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,9 @@ public class GamePlayRestController {
     private final GameLogicService gameLogicService;
     private final GameWebSocketService gameWebSocketService;
     private final AiPlayerService aiPlayerService;
+    
+    // Concurrency control map to ensure only one AI chain runs per game
+    private static final ConcurrentHashMap<Long, Boolean> aiChainRunning = new ConcurrentHashMap<>();
 
     public GamePlayRestController(GameService gameService, UserService userService, 
                              GameLogicService gameLogicService, GameWebSocketService gameWebSocketService,
@@ -139,11 +143,16 @@ public class GamePlayRestController {
                 logger.info("REST API: Next player: {}", nextPlayerName);
                 gameWebSocketService.sendNextTurnUpdate(gameId, nextPlayer.getColor().name().toLowerCase(), nextPlayerName);
                 
-                // If next player is a bot, trigger AI move asynchronously
+                // If next player is a bot, trigger AI move asynchronously - but only if no AI chain is already running
                 if (nextPlayer.isBot()) {
                     logger.info("REST API: Next player is a bot, processing AI turn chain");
-                    // Process AI moves in a chain (handles multiple consecutive AI players)
-                    processAiTurnChain(gameId);
+                    // Check if there's already an AI chain running for this game
+                    if (aiChainRunning.get(gameId) == null) {
+                        // Process AI moves in a chain (handles multiple consecutive AI players)
+                        processAiTurnChain(gameId);
+                    } else {
+                        logger.info("AI chain already running for game {}. Not starting a new one from place-piece.", gameId);
+                    }
                 }
             }
            
@@ -199,7 +208,19 @@ public class GamePlayRestController {
      * @param gameId The game ID
      */
     private void processAiTurnChain(Long gameId) {
-        processNextAiTurn(gameId);
+        // Skip if there's already an AI chain running for this game
+        if (aiChainRunning.putIfAbsent(gameId, Boolean.TRUE) != null) {
+            logger.info("AI chain already running for game {}, skipping", gameId);
+            return;
+        }
+        
+        try {
+            processNextAiTurn(gameId);
+        } catch (Exception e) {
+            logger.error("Error starting AI chain for game {}: {}", gameId, e.getMessage());
+            // Make sure to clear the running state in case of errors
+            aiChainRunning.remove(gameId);
+        }
     }
     
     /**
@@ -214,17 +235,20 @@ public class GamePlayRestController {
             Game game = gameService.findById(gameId);
             if (game == null) {
                 logger.error("ERROR: Game not found in REST processNextAiTurn");
+                aiChainRunning.remove(gameId);
                 return;
             }
             GameUser currentPlayer = game.getCurrentPlayer();
             if (currentPlayer == null) {
                 logger.info("Exiting AI chain: No current player");
+                aiChainRunning.remove(gameId);
                 return;
             }
             if (!currentPlayer.isBot()) {
                 logger.info("Exiting AI chain: Current player is human - {} ({})",
                     (currentPlayer.getUser() != null ? currentPlayer.getUser().getUsername() : "Unknown"),
                     currentPlayer.getColor().name());
+                aiChainRunning.remove(gameId);
                 return;
             }
             String botColor = currentPlayer.getColor().name();
@@ -240,6 +264,7 @@ public class GamePlayRestController {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 logger.error("REST API ERROR: Thread interrupted while waiting to process {} bot move", botColor);
+                aiChainRunning.remove(gameId);
                 return;
             }
             // Execute the AI move
@@ -264,7 +289,9 @@ public class GamePlayRestController {
                     if (nextPlayer.isBot()) {
                         try {
                             Thread.sleep(1000);
+                            // Don't release the lock yet - continue the chain
                             processNextAiTurn(gameId);
+                            return; // Important: we return directly to avoid releasing the lock
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             logger.warn("Thread interrupted before processing next bot move", e);
@@ -283,6 +310,9 @@ public class GamePlayRestController {
             }
         } catch (Exception e) {
             logger.error("CRITICAL ERROR in REST processNextAiTurn: {}", e.getMessage(), e);
+        } finally {
+            // Release the AI chain lock when done
+            aiChainRunning.remove(gameId);
         }
     }
 
@@ -314,6 +344,81 @@ public class GamePlayRestController {
             gameWebSocketService.sendNextTurnUpdate(gameId, nextPlayer.getColor().name().toLowerCase(), nextPlayerName);
         }
         return ResponseEntity.ok(Map.of("status", "skipped"));
+    }
+    
+    /**
+     * Handles timer timeout - advances turn when a player's timer reaches zero
+     */
+    @PostMapping("/api/timeout-turn")
+    public ResponseEntity<?> handleTimeoutTurn(@PathVariable Long gameId) {
+        try {
+            logger.info("REST API: Received timeout-turn request for game: {}", gameId);
+            
+            Game game = gameService.findById(gameId);
+            if (game == null) {
+                logger.info("REST API: Game not found in timeout-turn");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                    .body(Map.of("error", "Game not found"));
+            }
+            
+            // Verify this is a timed mode game
+            if (game.getMode() != Game.GameMode.TIMED) {
+                logger.info("REST API: Not a timed mode game: {}", gameId);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                    .body(Map.of("error", "Not a timed mode game"));
+            }
+            
+            // Get current player before advancing
+            GameUser currentPlayer = game.getCurrentPlayer();
+            if (currentPlayer == null) {
+                logger.info("REST API: No current player in timeout-turn");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                    .body(Map.of("error", "No current player"));
+            }
+            
+            String currentPlayerName = currentPlayer.isBot() ? 
+                                     "Bot " + currentPlayer.getColor().name().toLowerCase() :
+                                     (currentPlayer.getUser() != null ? currentPlayer.getUser().getUsername() : "Unknown");
+            
+            logger.info("REST API: Timeout for player: {}", currentPlayerName);
+            
+            // Send a notification that player's turn timed out
+            gameWebSocketService.sendPlayerSkippedUpdate(gameId, currentPlayerName + " (timeout)");
+            
+            // Advance to next player's turn
+            GameUser nextPlayer = gameLogicService.nextTurn(gameId);
+            
+            if (nextPlayer != null) {
+                String nextPlayerName = nextPlayer.isBot() ? 
+                                      "Bot " + nextPlayer.getColor().name().toLowerCase() : 
+                                      (nextPlayer.getUser() != null ? nextPlayer.getUser().getUsername() : "Unknown");
+                
+                logger.info("REST API: Next player after timeout: {}", nextPlayerName);
+                
+                // Send WebSocket notification about next player
+                gameWebSocketService.sendNextTurnUpdate(gameId, 
+                                                     nextPlayer.getColor().name().toLowerCase(), 
+                                                     nextPlayerName);
+                
+                // If next player is a bot, trigger AI move - but only if no AI chain is already running
+                if (nextPlayer.isBot()) {
+                    logger.info("REST API: Next player is a bot, processing AI move after timeout");
+                    // Check if there's already an AI chain running for this game
+                    if (aiChainRunning.get(gameId) == null) {
+                        processAiTurnChain(gameId);
+                    } else {
+                        logger.info("AI chain already running for game {}. Not starting a new one from timeout handler.", gameId);
+                    }
+                }
+            }
+            
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Turn advanced due to timeout"));
+            
+        } catch (Exception e) {
+            logger.error("REST API: Error handling timeout: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .body(Map.of("error", "Error processing timeout: " + e.getMessage()));
+        }
     }
 
     /**

@@ -129,8 +129,6 @@
                 <span th:text="${user.username}">Utilisateur</span>
               </a>
               <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="/profile">Mon profil</a></li>
-                <li><hr class="dropdown-divider" /></li>
                 <li>
                   <form th:action="@{/logout}" method="post">
                     <button class="dropdown-item" type="submit">

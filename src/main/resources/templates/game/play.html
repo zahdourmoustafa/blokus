@@ -239,6 +239,20 @@
         </div>
       </div>
 
+      <!-- Chronometer display for TIMED mode - positioned at the top -->
+      <div
+        id="chronometer-display"
+        class="chronometer-display"
+        th:if="${game.mode.name() == 'TIMED'}"
+        style="display: none"
+      >
+        <div class="chronometer-timer">
+          <span id="timer-value">60</span>
+          <span class="timer-unit">s</span>
+        </div>
+        <div class="chronometer-player" id="timer-player-name"></div>
+      </div>
+
       <!-- Current Player Info -->
       <div class="game-info">
         <h3>
@@ -277,7 +291,6 @@
     <div class="game-message" style="display: none"></div>
 
     <!-- Piece Controls - Moved outside the game board container -->
-    <!-- Skip button is dynamically added by JS -->
     <div id="piece-controls" class="piece-controls">
       <button id="rotate-left" class="control-button">Tourner à gauche</button>
       <button id="rotate-right" class="control-button">Tourner à droite</button>

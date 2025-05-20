@@ -2,12 +2,20 @@ package com.blokus.blokus.service.impl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.DisposableBean;
 
 import com.blokus.blokus.dto.GameCreateDto;
 import com.blokus.blokus.dto.GameStatisticsDto;
@@ -24,6 +32,7 @@ import com.blokus.blokus.repository.GameRepository;
 import com.blokus.blokus.repository.GameUserRepository;
 import com.blokus.blokus.service.GameLogicService;
 import com.blokus.blokus.service.GameService;
+import com.blokus.blokus.service.GameWebSocketService;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -31,18 +40,24 @@ import jakarta.persistence.EntityNotFoundException;
  * Implémentation du service de gestion des parties
  */
 @Service
-public class GameServiceImpl implements GameService {
+public class GameServiceImpl implements GameService, DisposableBean {
 
     private final GameRepository gameRepository;
     private final GameUserRepository gameUserRepository;
     private final GameLogicService gameLogicService;
+    private final GameWebSocketService gameWebSocketService;
+
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final Map<Long, ScheduledFuture<?>> gameTimers = new ConcurrentHashMap<>();
 
     public GameServiceImpl(GameRepository gameRepository,
             GameUserRepository gameUserRepository,
-            GameLogicService gameLogicService) {
+            GameLogicService gameLogicService,
+            GameWebSocketService gameWebSocketService) {
         this.gameRepository = gameRepository;
         this.gameUserRepository = gameUserRepository;
         this.gameLogicService = gameLogicService;
+        this.gameWebSocketService = gameWebSocketService;
     }
 
     @Override
@@ -390,11 +405,21 @@ public class GameServiceImpl implements GameService {
                              (firstPlayer.isBot() ? "Bot " + firstPlayer.getColor() : 
                               (firstPlayer.getUser() != null ? firstPlayer.getUser().getUsername() : "Unknown")) + 
                              " with color " + firstPlayer.getColor());
+            if (game.getMode() == GameMode.TIMED) {
+                game.setTurnStartTime(LocalDateTime.now());
+                // Game will be saved below, then schedule timer
+            }
         } else {
             System.out.println("ERROR: No players available to set as first player");
         }
         
-        return gameRepository.save(game);
+        Game savedGame = gameRepository.save(game); // Save game first
+
+        if (savedGame.getMode() == GameMode.TIMED && savedGame.getStatus() == GameStatus.PLAYING) {
+            scheduleTurnTimer(savedGame); // Schedule timer after game is saved and status is PLAYING
+        }
+        
+        return savedGame;
     }
     
     /**
@@ -525,27 +550,52 @@ public class GameServiceImpl implements GameService {
     @Transactional
     public boolean placePiece(Long gameId, Long userId, String pieceId, String pieceColor, 
                             int x, int y, int rotation, boolean flipped) {
-        // THIS METHOD IS NOW REDUNDANT HERE - Logic moved to GameLogicServiceImpl
-        // Keep it here for compatibility or remove if confirmed unused elsewhere
-        // Currently, it lacks the piece removal logic.
-         Game game = findById(gameId);
+        Game game = findById(gameId);
         
         // Verify the game is in playing state
         if (game.getStatus() != GameStatus.PLAYING) {
+            System.out.println("placePiece: Game " + gameId + " is not in PLAYING status.");
             return false;
         }
-        
-        // Verify it's the user's turn
-        GameUser currentPlayer = game.getCurrentPlayer();
-         if (currentPlayer == null || currentPlayer.isBot() || // Added check for bot
-            currentPlayer.getUser() == null || 
-            !currentPlayer.getUser().getId().equals(userId)) {
-            return false; // Not this human player's turn
+
+        // Cancel timer before attempting to place a piece if in timed mode
+        if (game.getMode() == GameMode.TIMED) {
+            cancelTimer(gameId);
         }
         
         // Delegate actual placement and validation to GameLogicService
         boolean placed = gameLogicService.placePiece(gameId, userId, pieceId, pieceColor, x, y, rotation, flipped);
 
+        if (placed) {
+            // Re-fetch game to get the absolute latest state after piece placement and potential turn advancement by GameLogicService
+            Game updatedGame = findById(gameId); 
+            
+            if (updatedGame.getStatus() == GameStatus.PLAYING) {
+                 if (updatedGame.getMode() == GameMode.TIMED) {
+                    updatedGame.setTurnStartTime(LocalDateTime.now());
+                    gameRepository.save(updatedGame); // Save the new turn start time
+                    scheduleTurnTimer(updatedGame); // Schedule timer for the next player
+                 }
+                 // Notify clients about the game state change (e.g., piece placed, next turn)
+                 // GameLogicServiceImpl.nextTurn already sends PIECE_PLACED and NEXT_TURN
+                 // However, a general state change might be useful for the timer display on client.
+                 gameWebSocketService.notifyGameStateChanged(updatedGame.getId());
+            } else if (updatedGame.getStatus() == GameStatus.FINISHED) {
+                // If game is finished, ensure any active timer is cancelled.
+                if (updatedGame.getMode() == GameMode.TIMED) {
+                    cancelTimer(updatedGame.getId());
+                }
+                // GameLogicServiceImpl.nextTurn or isGameOver should handle sending GAME_OVER WebSocket message.
+            }
+        } else {
+            // If placement failed, and it was a timed game, we need to restart the timer for the current player.
+            if (game.getMode() == GameMode.TIMED && game.getStatus() == GameStatus.PLAYING) {
+                // Ensure the game object 'game' still reflects the state before the failed placement attempt for scheduling.
+                // If findById was called inside gameLogicService.placePiece and modified 'game', this might be an issue.
+                // Assuming 'game' variable here is still valid for the current player if 'placed' is false.
+                scheduleTurnTimer(game); 
+            }
+        }
         return placed;
     }
 
@@ -609,5 +659,88 @@ public class GameServiceImpl implements GameService {
                 );
             })
             .collect(Collectors.toList());
+    }
+
+    private void scheduleTurnTimer(Game game) {
+        if (game.getMode() != GameMode.TIMED || game.getStatus() != GameStatus.PLAYING) {
+            return;
+        }
+
+        cancelTimer(game.getId()); // Cancel any existing timer for this game
+
+        System.out.println("Scheduling turn timer for game " + game.getId() + " for player " + game.getCurrentPlayer().getColor() + " for 60 seconds.");
+        ScheduledFuture<?> newTimer = scheduler.schedule(() -> {
+            System.out.println("Timer expired for game " + game.getId() + ". Advancing turn due to timeout.");
+            advanceTurnDueToTimeout(game.getId());
+        }, 60, TimeUnit.SECONDS);
+        gameTimers.put(game.getId(), newTimer);
+    }
+
+    private void cancelTimer(Long gameId) {
+        ScheduledFuture<?> existingTimer = gameTimers.remove(gameId);
+        if (existingTimer != null) {
+            boolean cancelled = existingTimer.cancel(false);
+            System.out.println("Cancelled timer for game " + gameId + ". Success: " + cancelled);
+        }
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        System.out.println("Shutting down GameServiceImpl scheduler.");
+        scheduler.shutdownNow();
+        try {
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                System.err.println("Scheduler did not terminate in the specified time.");
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+        gameTimers.clear();
+    }
+
+    @Transactional
+    public Game advanceTurnDueToTimeout(Long gameId) {
+        Game game = findById(gameId);
+        if (game.getStatus() != GameStatus.PLAYING || game.getMode() != GameMode.TIMED) {
+            // Only advance if game is playing and in timed mode
+            // If not, ensure timer is cancelled just in case
+            cancelTimer(gameId);
+            return game;
+        }
+
+        System.out.println("Advancing turn due to timeout for game: " + gameId);
+        // GameUser previousPlayer = game.getCurrentPlayer(); // Keep for potential future use if specific timeout notification is desired
+        // String previousPlayerName = previousPlayer != null ? (previousPlayer.isBot() ? "Bot " + previousPlayer.getColor() : previousPlayer.getUser().getUsername()) : "Unknown"; // Unused variable
+
+        // gameLogicService.nextTurn handles changing player, saving game, and WebSocket notifications for next turn or game over.
+        GameUser nextPlayer = gameLogicService.nextTurn(gameId);
+
+        // Re-fetch game to get the absolute latest state after nextTurn call
+        Game updatedGame = findById(gameId); 
+
+        if (updatedGame.getStatus() == GameStatus.PLAYING && nextPlayer != null) {
+            updatedGame.setTurnStartTime(LocalDateTime.now());
+            gameRepository.save(updatedGame); // Save updated turn start time
+            scheduleTurnTimer(updatedGame); // Schedule timer for the new player's turn
+            
+            // Send a specific WebSocket message for timeout
+            // gameWebSocketService.sendGameUpdate(gameId, "TURN_TIMEOUT", previousPlayerName + "'s turn timed out. Now " + nextPlayer.getUser().getUsername() + "'s turn.", Map.of("timedOutPlayer", previousPlayerName, "nextPlayer", nextPlayer.getUser().getUsername()));
+            // The existing nextTurn call in gameLogicService should send a generic NEXT_TURN, 
+            // clients can infer timeout if the turn changed without a piece placement.
+            // However, a more specific message might be better.
+            // For now, relying on notifyGameStateChanged for client to refresh timer.
+            gameWebSocketService.notifyGameStateChanged(gameId);
+            System.out.println("Turn advanced due to timeout for game " + gameId + ". Next player: " + (nextPlayer.isBot() ? "Bot " + nextPlayer.getColor() : nextPlayer.getUser().getUsername()));
+        } else if (updatedGame.getStatus() == GameStatus.FINISHED) {
+            System.out.println("Game " + gameId + " finished after timeout or no player could move.");
+            cancelTimer(gameId); // Ensure timer is cleaned up if game ended
+            // gameLogicService.nextTurn or calculateScores should have sent GAME_OVER
+        } else {
+            // This case (still PLAYING but nextPlayer is null) should ideally be handled by nextTurn leading to FINISHED.
+            // If it occurs, means no one can play, game should be over.
+            System.out.println("Game " + gameId + " is still PLAYING but no next player determined after timeout. This may indicate an issue or game end.");
+            cancelTimer(gameId);
+        }
+        return updatedGame;
     }
 } 

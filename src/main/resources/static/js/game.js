@@ -24,6 +24,11 @@ const GameState = {
   board: Array(20)
     .fill()
     .map(() => Array(20).fill(null)),
+  // Chronometer properties for TIMED mode
+  isTimedMode: false,
+  timerValue: 60,
+  timerInterval: null,
+  timerStartTime: null,
 };
 
 // Initialize game when DOM is loaded
@@ -71,8 +76,22 @@ function initializeGame() {
   initializeCurrentPlayerDisplay();
   initializePieceControls();
 
-  // Add Skip Turn button after controls are initialized and in the right place
-  setTimeout(addSkipTurnButton, 0);
+  // Check if this is a timed mode game
+  const chronometerDisplay = document.getElementById("chronometer-display");
+  if (chronometerDisplay) {
+    // If the chronometer element exists (means we're in timed mode)
+    GameState.isTimedMode = true;
+    chronometerDisplay.style.display = "block";
+
+    // Check if game is in playing status (the timer should only run during active games)
+    const gameStatusElement = document.querySelector(".game-status");
+    if (
+      gameStatusElement &&
+      gameStatusElement.textContent.includes("Jeu en cours")
+    ) {
+      initializeChronometer();
+    }
+  }
 
   // Force refresh to hide all used pieces
   hideAllUsedPieces();
@@ -771,7 +790,6 @@ function handleNextTurn(turnUpdate) {
 
   // Update current player display
   const currentPlayerSpan = document.getElementById("current-player");
-  const skipButton = document.getElementById("skip-turn");
   if (currentPlayerSpan) {
     currentPlayerSpan.textContent = nextPlayerUsername;
     currentPlayerSpan.classList.remove("current-player-active");
@@ -780,22 +798,27 @@ function handleNextTurn(turnUpdate) {
       currentPlayerSpan.classList.add("current-player-active");
       showMessage("It's your turn!");
       updatePieceSelectionState(true);
-      if (skipButton) skipButton.style.display = "inline-block";
     } else if (nextPlayerUsername.startsWith("Bot ")) {
       showMessage("Bot is making a move...");
       updatePieceSelectionState(false);
-      if (skipButton) skipButton.style.display = "none";
       setTimeout(() => {
         refreshGameState();
       }, 1000);
     } else {
       showMessage("It's " + nextPlayerUsername + "'s turn");
       updatePieceSelectionState(false);
-      if (skipButton) skipButton.style.display = "none";
     }
 
     // Hide used pieces
     hideAllUsedPieces();
+
+    // Update timer player name if in timed mode
+    if (GameState.isTimedMode) {
+      const timerPlayerName = document.getElementById("timer-player-name");
+      if (timerPlayerName) {
+        timerPlayerName.textContent = nextPlayerUsername;
+      }
+    }
   }
 
   // Dispatch custom event for skip button logic
@@ -859,12 +882,6 @@ function handleGameOver(data) {
 
   // Disable all piece selection
   updatePieceSelectionState(false);
-
-  // Hide any skip turn button
-  const skipButton = document.getElementById("skip-turn");
-  if (skipButton) {
-    skipButton.style.display = "none";
-  }
 }
 
 /**
@@ -1582,60 +1599,217 @@ function initializePieceControls() {
   });
 }
 
-// Add Skip Turn button to the controls area if not already present
-function addSkipTurnButton() {
-  let controlsArea = document.querySelector(".piece-controls");
-  let skipButton = document.getElementById("skip-turn");
-  if (!skipButton) {
-    skipButton = document.createElement("button");
-    skipButton.id = "skip-turn";
-    skipButton.textContent = "Skip Turn";
-    skipButton.style.display = "none";
-    skipButton.style.marginLeft = "10px";
-    if (controlsArea) {
-      controlsArea.appendChild(skipButton);
-    } else {
-      document.body.appendChild(skipButton);
-      console.log(
-        "[Blokus] .piece-controls not found, adding Skip Turn button to body."
-      );
+// ==========================================
+// CHRONOMETER FUNCTIONS FOR TIMED MODE
+// ==========================================
+
+/**
+ * Initialize the chronometer for timed mode
+ */
+function initializeChronometer() {
+  // Make sure timed mode is enabled
+  if (!GameState.isTimedMode) return;
+
+  // Get the elements
+  const timerDisplay = document.getElementById("chronometer-display");
+  const timerValue = document.getElementById("timer-value");
+  const timerPlayerName = document.getElementById("timer-player-name");
+
+  if (!timerDisplay || !timerValue || !timerPlayerName) return;
+
+  // Show the timer
+  timerDisplay.style.display = "block";
+
+  // Set initial timer value
+  GameState.timerValue = 60;
+  timerValue.textContent = GameState.timerValue;
+
+  // Get current player's name
+  const currentPlayerSpan = document.getElementById("current-player");
+  if (currentPlayerSpan) {
+    const playerName = currentPlayerSpan.textContent.trim();
+    timerPlayerName.textContent = playerName;
+  }
+
+  // Start the timer
+  startChronometer();
+}
+
+/**
+ * Start the chronometer countdown
+ */
+function startChronometer() {
+  // Clear any existing interval
+  if (GameState.timerInterval) {
+    clearInterval(GameState.timerInterval);
+    GameState.timerInterval = null;
+  }
+
+  // Reset timer value
+  GameState.timerValue = 60;
+  GameState.timerStartTime = Date.now();
+
+  // Update the display
+  const timerValue = document.getElementById("timer-value");
+  const timerPlayerName = document.getElementById("timer-player-name");
+
+  if (timerValue) {
+    timerValue.textContent = GameState.timerValue;
+    timerValue.className = ""; // Reset any warning classes
+  }
+
+  // Get current player's name
+  const currentPlayerSpan = document.getElementById("current-player");
+  if (currentPlayerSpan && timerPlayerName) {
+    const playerName = currentPlayerSpan.textContent.trim();
+    timerPlayerName.textContent = playerName;
+  }
+
+  // Start the interval
+  GameState.timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - GameState.timerStartTime) / 1000);
+    const remaining = Math.max(0, 60 - elapsed);
+
+    GameState.timerValue = remaining;
+
+    if (timerValue) {
+      timerValue.textContent = remaining;
+
+      // Add warning classes when time is running low
+      if (remaining <= 10 && remaining > 5) {
+        timerValue.className = "timer-warning";
+      } else if (remaining <= 5) {
+        timerValue.className = "timer-danger";
+      } else {
+        timerValue.className = "";
+      }
     }
-    skipButton.addEventListener("click", function () {
-      fetch(`/games/${GameState.gameId}/api/skip-turn`, {
-        method: "POST",
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-        },
-        credentials: "same-origin",
-      }).then((response) => {
+
+    // If timer reaches zero, actively call the server to advance the turn
+    if (remaining === 0) {
+      clearInterval(GameState.timerInterval);
+      GameState.timerInterval = null;
+
+      // Notify user that time is up
+      showMessage("Time's up! Turn is being advanced...");
+
+      // Actively call the server to advance the turn due to timeout
+      handleTimeoutTurn();
+    }
+  }, 1000);
+}
+
+/**
+ * Stop the chronometer
+ */
+function stopChronometer() {
+  if (GameState.timerInterval) {
+    clearInterval(GameState.timerInterval);
+    GameState.timerInterval = null;
+  }
+}
+
+/**
+ * Reset and restart the chronometer
+ */
+function resetChronometer() {
+  stopChronometer();
+
+  // Only start if in timed mode
+  if (GameState.isTimedMode) {
+    startChronometer();
+  }
+}
+
+// Extend handleNextTurn to update the chronometer
+const originalHandleNextTurn = handleNextTurn;
+handleNextTurn = function (turnUpdate) {
+  originalHandleNextTurn(turnUpdate);
+
+  // Reset chronometer on turn change if in timed mode
+  if (GameState.isTimedMode) {
+    resetChronometer();
+  }
+};
+
+// Extend handleGameOver to stop the chronometer
+const originalHandleGameOver = handleGameOver;
+handleGameOver = function (data) {
+  originalHandleGameOver(data);
+
+  // Stop the chronometer when game is over
+  stopChronometer();
+
+  // Hide the chronometer display
+  const timerDisplay = document.getElementById("chronometer-display");
+  if (timerDisplay) {
+    timerDisplay.style.display = "none";
+  }
+};
+
+// Extend placePiece to stop chronometer during the placement
+const originalPlacePiece = placePiece;
+placePiece = function (x, y) {
+  // Stop the chronometer while the piece is being placed
+  if (GameState.isTimedMode) {
+    stopChronometer();
+  }
+
+  // Call the original function
+  return originalPlacePiece(x, y);
+};
+
+/**
+ * Handles timer timeout by calling the server API
+ */
+function handleTimeoutTurn() {
+  if (!GameState.gameId) return;
+
+  // Get CSRF token if Spring Security is enabled
+  const csrfToken = document
+    .querySelector("meta[name='_csrf']")
+    ?.getAttribute("content");
+  const csrfHeader = document
+    .querySelector("meta[name='_csrf_header']")
+    ?.getAttribute("content");
+
+  // Call the server to advance the turn due to timeout
+  // Check if current player is a bot - avoid timeout calls during bot turns
+  const currentPlayerSpan = document.getElementById("current-player");
+  const isCurrentPlayerBot =
+    currentPlayerSpan &&
+    currentPlayerSpan.textContent.trim().toLowerCase().includes("bot");
+
+  // Only make the timeout call if the current player is not a bot
+  if (!isCurrentPlayerBot) {
+    fetch(`/games/${GameState.gameId}/api/timeout-turn`, {
+      method: "POST",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        ...(csrfHeader ? { [csrfHeader]: csrfToken } : {}),
+      },
+      credentials: "same-origin",
+    })
+      .then((response) => {
         if (!response.ok) {
-          showMessage("Failed to skip turn.");
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("Timeout turn processed:", data);
+        // The server should handle the WebSocket notifications
+        // No need to do anything else here
+      })
+      .catch((error) => {
+        console.error("Error advancing turn after timeout:", error);
+        // Fallback to refreshing game state if the API call fails
+        showMessage("Error advancing turn. Refreshing game state...");
+        setTimeout(refreshGameState, 1000);
       });
-    });
-  }
-  // Show the skip button only when it's the current user's turn
-  function updateSkipButtonVisibility() {
-    // Find the current player name from the UI
-    const currentPlayerSpan = document.getElementById("current-player");
-    if (
-      currentPlayerSpan &&
-      GameState.currentUsername &&
-      currentPlayerSpan.textContent.trim() === GameState.currentUsername
-    ) {
-      skipButton.style.display = "";
-    } else {
-      skipButton.style.display = "none";
-    }
-  }
-  // Call on load and on turn change
-  updateSkipButtonVisibility();
-  document.addEventListener("nextTurn", updateSkipButtonVisibility);
-  if (typeof refreshGameState === "function") {
-    const origRefresh = refreshGameState;
-    window.refreshGameState = function () {
-      origRefresh.apply(this, arguments);
-      updateSkipButtonVisibility();
-    };
+  } else {
+    console.log("Current player is a bot, not sending timeout-turn request");
+    // Just refresh the game state in case the bot is stuck
+    setTimeout(refreshGameState, 1000);
   }
 }
